@@ -1,0 +1,94 @@
+###############################################################################
+# Pa_mSikA — Docker Compose (Production-Ready)
+# Usage:  docker-compose up -d --build
+# App:    http://localhost
+# API:    http://localhost/api/docs
+###############################################################################
+
+services:
+
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-pamsika}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-pamsika_secret}
+      POSTGRES_DB: ${POSTGRES_DB:-pamsika_db}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-pamsika} -d ${POSTGRES_DB:-pamsika_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pamsika_net
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: redis-server --save 60 1 --loglevel warning
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - pamsika_net
+
+  api:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    expose:
+      - "8000"
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - uploads_data:/app/uploads
+    # Run as root so the app can write to the Docker-mounted uploads volume
+    user: "0:0"
+    command: >
+      sh -c "chmod 777 /app/uploads &&
+             alembic upgrade head &&
+             python seed.py &&
+             uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      start_period: 30s
+      retries: 3
+    networks:
+      - pamsika_net
+
+  nginx:
+    image: nginx:1.25-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    volumes:
+      - ./frontend:/usr/share/nginx/html:ro
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - uploads_data:/app/uploads:ro
+    depends_on:
+      api:
+        condition: service_healthy
+    networks:
+      - pamsika_net
+
+volumes:
+  postgres_data:
+  redis_data:
+  uploads_data:
+
+networks:
+  pamsika_net:
+    driver: bridge

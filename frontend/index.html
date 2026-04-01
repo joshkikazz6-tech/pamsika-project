@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1.0,viewport-fit=cover">
+  <title>Pa_mSikA — Premium Malawian Marketplace</title>
+  <!-- SW killer: unregisters any old service worker so fresh JS always loads -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(regs) {
+        regs.forEach(function(reg) {
+          if (reg.active && reg.active.scriptURL && reg.active.scriptURL.indexOf('v3') === -1) {
+            reg.unregister();
+          }
+        });
+      });
+    }
+  </script>
+  <meta name="description" content="Pa_mSikA — Your all-in-one trusted marketplace in Malawi.">
+  <meta name="theme-color" content="#c8a84b">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pa_mSikA">
+  <meta property="og:title" content="Pa_mSikA — Malawi Marketplace">
+  <meta property="og:description" content="Buy, discover, and earn — the African way.">
+  <meta property="og:url" content="https://pamsika.mw">
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+
+<!-- LOADING -->
+<div id="loading-screen">
+  <div class="loader-logo">Pa_mSikA</div>
+  <div class="loader-bar-wrap"><div class="loader-bar-fill"></div></div>
+  <div class="loader-sub">Loading marketplace…</div>
+</div>
+
+<!-- NAVBAR -->
+<nav id="navbar" class="glass">
+  <button id="hamburger" class="hamburger" aria-label="Menu">
+    <span></span><span></span><span></span>
+  </button>
+  <a href="#" class="nav-logo" onclick="Views.show('home');return false;">
+    <div class="nav-logo-mark">Pa<br>mSika</div>
+    <div>
+      <div class="nav-logo-text">Pa_mSikA</div>
+    </div>
+  </a>
+  <div class="nav-search-wrap">
+    <span class="nav-search-icon">🔍</span>
+    <input id="nav-search-inp" class="nav-search" type="search" placeholder="Search products, category, location…" autocomplete="off">
+  </div>
+  <div class="nav-actions">
+    <button id="theme-btn" class="nav-btn" onclick="UI.toggleTheme()" title="Toggle theme">☀️</button>
+    <button class="nav-btn" onclick="Views.show('favorites')" title="Favourites">
+      ❤️<span class="nav-badge red" id="fav-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" onclick="Cart.openModal()" title="Cart">
+      🛒<span class="nav-badge" id="cart-badge" style="display:none">0</span>
+    </button>
+    <button class="nav-btn" onclick="Views.show('affiliate')" title="Affiliate">💼</button>
+    <button class="nav-btn" onclick="Views.show('account')" id="nav-auth-btn" title="Account">👤</button>
+    <div id="nav-user-area" style="display:none;align-items:center;gap:6px;">
+      <span id="nav-user-name" style="font-size:.75rem;color:var(--text-2);max-width:80px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+      <button class="nav-btn" onclick="Views.show('account')">👤</button>
+    </div>
+  </div>
+</nav>
+
+<div class="sidebar-overlay"></div>
+
+<!-- APP WRAP -->
+<div id="app-wrap">
+
+  <!-- SIDEBAR -->
+  <aside id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-label">Categories</div>
+      <nav class="cat-nav" id="cat-list"></nav>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Filters</div>
+      <div class="filter-group">
+        <select id="filter-location" style="font-size:.8rem;">
+          <option value="">All Locations</option>
+          <option>Lilongwe</option><option>Blantyre</option>
+          <option>Mzuzu</option><option>Zomba</option>
+        </select>
+        <div class="price-row">
+          <input id="filter-min" type="number" placeholder="Min MWK" style="font-size:.76rem;">
+          <input id="filter-max" type="number" placeholder="Max MWK" style="font-size:.76rem;">
+        </div>
+        <button class="apply-btn" onclick="UI.applyFilters()">Apply Filters</button>
+        <button class="btn btn-ghost btn-sm" style="width:100%;" onclick="Products.resetFilters()">Reset</button>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div class="sidebar-label">Quick</div>
+      <div class="cat-nav">
+        <div class="cat-item" onclick="Products.state.sort='hot';document.getElementById('sort-select').value='hot';Products.load();Views.show('home');">
+          <span class="cat-item-left"><span class="cat-icon">🔥</span><span>Hot Products</span></span>
+        </div>
+        <div class="cat-item" onclick="Products.state.sort='new';document.getElementById('sort-select').value='new';Products.load();Views.show('home');">
+          <span class="cat-item-left"><span class="cat-icon">✨</span><span>New Arrivals</span></span>
+        </div>
+      </div>
+    </div>
+    <div class="sidebar-divider"></div>
+    <div class="sidebar-section">
+      <div style="background:linear-gradient(135deg,#0b6e4f,#0a5c41);border-radius:var(--radius);padding:14px;text-align:center;">
+        <div style="font-size:1.4rem;margin-bottom:6px;">💼</div>
+        <div style="font-family:var(--font-display);font-size:.95rem;color:#fff;margin-bottom:4px;">Earn with Pa_mSikA</div>
+        <div style="font-size:.7rem;color:rgba(255,255,255,.65);margin-bottom:10px;line-height:1.5;">5% commission per sale</div>
+        <button class="btn btn-gold btn-sm" style="width:100%;" onclick="Views.show('affiliate')">Become a Dolo →</button>
+      </div>
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <main id="main">
+    <!-- HOT STRIP -->
+    <div id="hot-strip"></div>
+
+    <!-- HOME VIEW -->
+    <div id="view-home">
+      <!-- HERO -->
+      <section id="hero">
+        <div class="hero-pattern"></div>
+        <div class="hero-eyebrow">🌍 Malawi's Premium Marketplace</div>
+        <h1 class="hero-h1">Takulandiran<br><strong>Pa_mSikA</strong></h1>
+        <p class="hero-sub">Your all-in-one trusted marketplace — automobiles, fashion, real estate, electronics and more.</p>
+        <div class="hero-btns">
+          <button class="btn btn-gold btn-lg" onclick="document.getElementById('products-section').scrollIntoView({behavior:'smooth'})">🛍 Enter Marketplace</button>
+          <button class="btn btn-outline btn-lg" onclick="Views.show('affiliate')">💼 Become Dolo Pa_mSikA</button>
+        </div>
+        <div class="hero-stats">
+          <div><div class="hero-stat-num" id="stat-products">—</div><div class="hero-stat-label">Listings</div></div>
+          <div><div class="hero-stat-num">5%</div><div class="hero-stat-label">Commission</div></div>
+          <div><div class="hero-stat-num">4</div><div class="hero-stat-label">Cities</div></div>
+          <div><div class="hero-stat-num">100%</div><div class="hero-stat-label">Trusted</div></div>
+        </div>
+      </section>
+
+      <!-- WA BANNER -->
+      <div id="wa-banner" onclick="window.open('https://www.facebook.com/share/1aFSLUWRQy/','_blank')">
+        <div class="wa-banner-icon">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="white"><path d="M24 12.073C24 5.404 18.627 0 12 0S0 5.404 0 12.073C0 18.1 4.388 23.094 10.125 24v-8.437H7.078v-3.49h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.49h-2.796V24C19.612 23.094 24 18.1 24 12.073z"/></svg>
+        </div>
+        <div class="wa-banner-text">
+          <div class="wa-banner-title">Follow Our Facebook Page</div>
+          <div class="wa-banner-sub">Stay updated with new arrivals &amp; exclusive deals</div>
+        </div>
+        <div class="wa-banner-arrow">→</div>
+      </div>
+
+      <!-- PRODUCTS -->
+      <section id="products-section">
+        <div class="section-bar">
+          <div>
+            <div class="section-title">Our Collection</div>
+            <div class="section-count" id="result-count">Loading…</div>
+          </div>
+          <div class="sort-wrap">
+            <select id="sort-select" class="sort-select">
+              <option value="featured">✦ Featured</option>
+              <option value="price-asc">Price: Low → High</option>
+              <option value="price-desc">Price: High → Low</option>
+              <option value="views">Most Viewed</option>
+              <option value="hot">Hot First</option>
+              <option value="new">New First</option>
+            </select>
+          </div>
+        </div>
+        <div id="products-grid">
+          <div class="skeleton-card"><div class="skeleton skeleton-img"></div><div class="skeleton-body"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line w-60"></div><div class="skeleton skeleton-line w-40"></div></div></div>
+          <div class="skeleton-card"><div class="skeleton skeleton-img"></div><div class="skeleton-body"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line w-60"></div><div class="skeleton skeleton-line w-40"></div></div></div>
+          <div class="skeleton-card"><div class="skeleton skeleton-img"></div><div class="skeleton-body"><div class="skeleton skeleton-line"></div><div class="skeleton skeleton-line w-60"></div><div class="skeleton skeleton-line w-40"></div></div></div>
+        </div>
+        <div id="pagination"></div>
+      </section>
+    </div>
+
+    <!-- FAVORITES VIEW -->
+    <div id="view-favorites" style="display:none;padding:22px 16px 40px;">
+      <span class="view-back" onclick="Views.show('home')">← Back</span>
+      <div class="view-title">❤️ My Favourites</div>
+      <div class="view-sub">Products you have saved</div>
+      <div class="favs-grid" id="favs-grid"></div>
+    </div>
+
+    <!-- AFFILIATE VIEW -->
+    <div id="view-affiliate" style="display:none;padding:22px 16px 40px;">
+      <span class="view-back" onclick="Views.show('home')">← Back</span>
+      <div class="view-title">💼 Dolo Pa_mSikA</div>
+      <div class="view-sub">Earn commissions by sharing — 5% per sale</div>
+      <div id="aff-view-body"></div>
+    </div>
+
+    <!-- ACCOUNT VIEW -->
+    <div id="view-account" style="display:none;padding:22px 16px 40px;">
+      <span class="view-back" onclick="Views.show('home')">← Back</span>
+      <div class="view-title">👤 My Account</div>
+      <div class="view-sub">Orders and account settings</div>
+      <div id="account-view-body"></div>
+    </div>
+  </main>
+</div>
+
+<!-- FOOTER -->
+<footer id="footer">
+  <div class="footer-grid">
+    <div>
+      <div style="font-family:var(--font-display);font-size:1.4rem;color:var(--gold);font-weight:700;">Pa_mSikA</div>
+      <p class="footer-brand-desc">Your all-in-one trusted marketplace in Malawi. Buy, discover, and earn — the African way.</p>
+    </div>
+    <div>
+      <div class="footer-col-title">Shop</div>
+      <span class="footer-link" onclick="Products.setCat('Automobiles',null)">Automobiles</span>
+      <span class="footer-link" onclick="Products.setCat('Fashion',null)">Fashion</span>
+      <span class="footer-link" onclick="Products.setCat('Real Estate',null)">Real Estate</span>
+      <span class="footer-link" onclick="Products.setCat('Electronics',null)">Electronics</span>
+    </div>
+    <div>
+      <div class="footer-col-title">Earn</div>
+      <span class="footer-link" onclick="Views.show('affiliate')">Become a Dolo</span>
+      <span class="footer-link" onclick="Views.show('affiliate')">My Dashboard</span>
+      <span class="footer-link" onclick="Views.show('affiliate')">Commission Info</span>
+    </div>
+    <div>
+      <div class="footer-col-title">Connect</div>
+      <a class="footer-link" href="mailto:Pamsika8@gmail.com">📧 Pamsika8@gmail.com</a>
+      <a class="footer-link" href="https://wa.me/265886826931" target="_blank">📱 +265 886 826 931</a>
+      <a class="footer-link" href="https://www.facebook.com/share/1aFSLUWRQy/" target="_blank">📘 Facebook</a>
+      <span class="footer-link" onclick="Views.show('account')">👤 My Account</span>
+    </div>
+  </div>
+  <div class="footer-bottom">
+    <span>© 2025 Pa_mSikA · Lilongwe, Malawi</span>
+    <span>📍 Made in 🇲🇼</span>
+  </div>
+</footer>
+
+<!-- MODALS -->
+
+<!-- Cart -->
+<div class="modal-backdrop" id="cart-modal">
+  <div class="modal-box">
+    <div class="modal-head"><span class="modal-title">🛒 Cart</span><button class="modal-close" onclick="Modal.close('cart-modal')">✕</button></div>
+    <div class="modal-body"><div id="cart-body"></div><div id="cart-foot"></div></div>
+  </div>
+</div>
+
+<!-- Order -->
+<div class="modal-backdrop" id="order-modal">
+  <div class="modal-box">
+    <div class="modal-head"><span class="modal-title">⚡ Place Order</span><button class="modal-close" onclick="Modal.close('order-modal')">✕</button></div>
+    <div class="modal-body" id="order-modal-body"></div>
+  </div>
+</div>
+
+<!-- Product Detail -->
+<div class="modal-backdrop" id="prod-modal">
+  <div class="modal-box wide">
+    <div class="modal-head"><span class="modal-title" id="prod-modal-title">Product</span><button class="modal-close" onclick="Modal.close('prod-modal')">✕</button></div>
+    <div class="modal-body" id="prod-modal-body"></div>
+  </div>
+</div>
+
+<!-- Auth -->
+<div class="modal-backdrop" id="auth-modal">
+  <div class="modal-box">
+    <div class="modal-head"><span class="modal-title">Welcome to Pa_mSikA</span><button class="modal-close" onclick="Modal.close('auth-modal')">✕</button></div>
+    <div class="modal-body" id="auth-modal-body"></div>
+  </div>
+</div>
+
+<!-- Withdraw -->
+<div class="modal-backdrop" id="withdraw-modal">
+  <div class="modal-box">
+    <div class="modal-head"><span class="modal-title">💸 Request Withdrawal</span><button class="modal-close" onclick="Modal.close('withdraw-modal')">✕</button></div>
+    <div class="modal-body" id="withdraw-modal-body"></div>
+  </div>
+</div>
+
+<!-- Admin -->
+<div class="modal-backdrop" id="admin-modal">
+  <div class="modal-box admin-full">
+    <div class="modal-head"><span class="modal-title">⚙️ Admin Panel — Pa_mSikA</span><button class="modal-close" onclick="Modal.close('admin-modal')">✕</button></div>
+    <div class="modal-body" style="padding:0;" id="admin-modal-body"></div>
+  </div>
+</div>
+
+<div id="toast-area"></div>
+
+<!-- PWA Banner -->
+<div id="pwa-banner">
+  <div style="font-size:1.5rem;">📱</div>
+  <div class="pwa-banner-text">
+    <div class="pwa-banner-title">Install Pa_mSikA</div>
+    <div class="pwa-banner-sub">Add to home screen</div>
+  </div>
+  <button class="btn btn-gold btn-sm" id="pwa-install-btn">Install</button>
+  <span class="pwa-close" id="pwa-dismiss">✕</span>
+</div>
+
+<script src="js/api.js"></script>
+<script src="js/app.js"></script>
+<script>
+  // Update hero stat once products load
+  document.addEventListener('DOMContentLoaded', () => {
+    const observer = new MutationObserver(() => {
+      const cnt = document.getElementById('result-count');
+      const stat = document.getElementById('stat-products');
+      if (cnt && stat && cnt.textContent && cnt.textContent !== 'Loading…') {
+        const num = cnt.textContent.split(' ')[0];
+        if (!isNaN(num)) { stat.textContent = num + '+'; observer.disconnect(); }
+      }
+    });
+    const cnt = document.getElementById('result-count');
+    if (cnt) observer.observe(cnt, { childList: true, characterData: true, subtree: true });
+
+    // Hard fallback: force-dismiss loading screen after 20s no matter what.
+    // Protects against any edge case that prevents the main boot sequence from completing.
+    setTimeout(() => {
+      const ls = document.getElementById('loading-screen');
+      if (ls) { ls.classList.add('done'); setTimeout(() => ls.remove(), 500); }
+    }, 20000);
+  });
+</script>
+</body>
+</html>
