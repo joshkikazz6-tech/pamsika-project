@@ -23,6 +23,6 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "font-src 'self' https://fonts.gstatic.com; "
             "img-src 'self' data: https: blob:; "
-            "connect-src 'self' http://localhost http://127.0.0.1 https://pamsika.mw https://www.pamsika.mw;"
+            "connect-src 'self' https://pamsika-project.onrender.com https://pamsika.onrender.com https://pamsika.mw https://www.pamsika.mw http://localhost http://127.0.0.1;"
         )
         return response
