@@ -279,21 +279,19 @@ async def patch_order(
                 aff_user = entry["user"]
                 total_commission = entry["amount"]
                 referrer = entry["referrer"]
-                is_self_referral = entry.get("is_self_referral", False)
                 sub_cut = 0.0
+                # Referrer (inviter) always gets 5% of the commission when their recruit earns
                 if referrer:
                     sub_cut = round(total_commission * 0.05, 2)
                     referrer.affiliate_commission_balance = round(
                         referrer.affiliate_commission_balance + sub_cut, 2
                     )
                     referrer.affiliate_sales += 1  # once per order, not per item
-                # On a self-order the sub-affiliate earns nothing themselves,
-                # but the referrer (inviter) still gets their 5% cut above.
-                if not is_self_referral:
-                    aff_user.affiliate_commission_balance = round(
-                        aff_user.affiliate_commission_balance + (total_commission - sub_cut), 2
-                    )
-                    aff_user.affiliate_sales += 1  # once per order, not per item
+                # Affiliate ALWAYS earns their own commission (including self-orders)
+                aff_user.affiliate_commission_balance = round(
+                    aff_user.affiliate_commission_balance + (total_commission - sub_cut), 2
+                )
+                aff_user.affiliate_sales += 1  # once per order, not per item
         # Reverse commissions if cancelling an order that was already completed+paid
         elif payload["status"] == "cancelled" and old_status == "completed" and order.commissions_paid:
             order.commissions_paid = False  # allow re-credit if re-completed
@@ -326,7 +324,6 @@ async def patch_order(
                 aff_user = entry["user"]
                 total_commission = entry["amount"]
                 referrer = entry["referrer"]
-                is_self_referral = entry.get("is_self_referral", False)
                 sub_cut = 0.0
                 if referrer:
                     sub_cut = round(total_commission * 0.05, 2)
@@ -334,11 +331,10 @@ async def patch_order(
                         0.0, round(referrer.affiliate_commission_balance - sub_cut, 2)
                     )
                     referrer.affiliate_sales = max(0, referrer.affiliate_sales - 1)
-                if not is_self_referral:
-                    aff_user.affiliate_commission_balance = max(
-                        0.0, round(aff_user.affiliate_commission_balance - (total_commission - sub_cut), 2)
-                    )
-                    aff_user.affiliate_sales = max(0, aff_user.affiliate_sales - 1)
+                aff_user.affiliate_commission_balance = max(
+                    0.0, round(aff_user.affiliate_commission_balance - (total_commission - sub_cut), 2)
+                )
+                aff_user.affiliate_sales = max(0, aff_user.affiliate_sales - 1)
 
     await db.flush()
     await log_action(db, "update_order", user_id=admin.id, resource="order",
