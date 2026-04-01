@@ -280,7 +280,7 @@ async def dashboard(
     # Grand total earned = direct commissions + sub-affiliate cut
     grand_total_earned = round(total_earned + sub_affiliate_total_earned, 2)
 
-    base_url = settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "https://pamsika.mw"
+    base_url = settings.FRONTEND_URL
     personal_referral_link = f"{base_url}?aff_invite={current_user.affiliate_id}"
 
     return {
@@ -311,7 +311,7 @@ async def referral_link(
     if not product:
         raise HTTPException(status_code=404, detail="Product not found")
 
-    base_url = settings.ALLOWED_ORIGINS[0] if settings.ALLOWED_ORIGINS else "https://pamsika.mw"
+    base_url = settings.FRONTEND_URL
     referral_url = f"{base_url}/products/{product_id}?ref={current_user.affiliate_id}"
 
     return ReferralLinkOut(

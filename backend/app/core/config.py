@@ -37,6 +37,9 @@ class Settings(BaseSettings):
     RATE_LIMIT_PER_MINUTE: int = 60
     RATE_LIMIT_AUTH_PER_MINUTE: int = 10
 
+    # Frontend URL (used for generating affiliate/referral links)
+    FRONTEND_URL: str = "https://pamsika.onrender.com"
+
     # Admin
     ADMIN_EMAIL: str = "admin@pamsika.mw"
 
