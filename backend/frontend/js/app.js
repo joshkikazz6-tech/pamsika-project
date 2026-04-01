@@ -1905,5 +1905,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('pwa-install-btn')?.addEventListener('click', async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; document.getElementById('pwa-banner')?.classList.remove('show'); });
   document.getElementById('pwa-dismiss')?.addEventListener('click', () => document.getElementById('pwa-banner')?.classList.remove('show'));
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
 });

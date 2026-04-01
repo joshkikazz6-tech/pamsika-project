@@ -86,6 +86,17 @@ FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../front
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
     app.mount("/js", StaticFiles(directory=os.path.join(FRONTEND_DIR, "js")), name="js")
+    _icons_dir = os.path.join(FRONTEND_DIR, "icons")
+    if os.path.isdir(_icons_dir):
+        app.mount("/icons", StaticFiles(directory=_icons_dir), name="icons")
+
+    @app.get("/manifest.json", include_in_schema=False)
+    async def serve_manifest():
+        return FileResponse(os.path.join(FRONTEND_DIR, "manifest.json"), media_type="application/manifest+json")
+
+    @app.get("/service-worker.js", include_in_schema=False)
+    async def serve_sw():
+        return FileResponse(os.path.join(FRONTEND_DIR, "service-worker.js"), media_type="application/javascript")
 
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str):
