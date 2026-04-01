@@ -495,6 +495,16 @@ const Products = {
 
       if (this.state.sort === 'hot') items = [...items.filter(p => p.badge === 'HOT'), ...items.filter(p => p.badge !== 'HOT')];
       else if (this.state.sort === 'new') items = [...items.filter(p => p.badge === 'NEW'), ...items.filter(p => p.badge !== 'NEW')];
+      else if (this.state.sort === 'newest' && this.state.cat === 'All Items' && !this.state.search) {
+        // Shuffle within each category so every refresh shows a different mix
+        const groups = {};
+        items.forEach(p => { const c = p.category || 'Other'; (groups[c] = groups[c] || []).push(p); });
+        Object.values(groups).forEach(g => { for (let i = g.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; } });
+        const cats = Object.keys(groups).sort();
+        items = [];
+        const maxLen = Math.max(...cats.map(c => groups[c].length));
+        for (let i = 0; i < maxLen; i++) cats.forEach(c => { if (groups[c][i]) items.push(groups[c][i]); });
+      }
 
       this._data = items;
       this._total = data.total || items.length;
@@ -1212,7 +1222,7 @@ const Admin = {
 
   checkCombo(key) {
     this._combo.push(key); if (this._combo.length > CFG.adminCombo.length) this._combo.shift();
-    if (this._combo.join('') === CFG.adminCombo.join('')) { this._combo = []; if (Auth.user?.is_admin) this.open(); else Toast.show('Access denied', 'Admin privileges required', 'error', '🚫'); }
+    if (this._combo.join('') === CFG.adminCombo.join('')) { this._combo = []; if (Auth.user?.is_admin) { localStorage.setItem(this.KEY, 'true'); this.open(); } else Toast.show('Access denied', 'Admin privileges required', 'error', '🚫'); }
   },
 
   open() {
@@ -1747,6 +1757,7 @@ const UI = {
     }
     // If the logged-in user is an admin, open the admin panel immediately
     if (Auth.user?.is_admin) {
+      localStorage.setItem(Admin.KEY, 'true');
       Admin._pendingOpen = false;
       setTimeout(() => Admin.open(), 300);
       await Favs.load();
