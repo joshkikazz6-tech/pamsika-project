@@ -172,8 +172,8 @@ const Cart = {
 
   _badge() {
     const n = this.items.reduce((s, i) => s + i.qty, 0);
-    const b = document.getElementById('cart-badge');
-    if (b) { b.textContent = n > 99 ? '99+' : n; b.style.display = n > 0 ? 'flex' : 'none'; }
+    const label = n > 99 ? '99+' : n;
+    ['cart-badge','cart-badge-b'].forEach(id => { const b = document.getElementById(id); if (b) { b.textContent = label; b.style.display = n > 0 ? 'flex' : 'none'; } });
   },
 
   async add(product, qty = 1) {
@@ -277,8 +277,8 @@ const Favs = {
   },
 
   _badge() {
-    const b = document.getElementById('fav-badge');
-    if (b) { b.textContent = this.ids.length; b.style.display = this.ids.length > 0 ? 'flex' : 'none'; }
+    const n = this.ids.length;
+    ['fav-badge','fav-badge-b'].forEach(id => { const b = document.getElementById(id); if (b) { b.textContent = n; b.style.display = n > 0 ? 'flex' : 'none'; } });
   },
 
   has(id) { return this.ids.includes(String(id)); },
