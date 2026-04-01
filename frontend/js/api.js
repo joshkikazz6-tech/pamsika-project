@@ -4,7 +4,7 @@
    Connects frontend to FastAPI backend
    ================================================================ */
 
-const API_BASE = '/api/v1';
+const API_BASE = 'https://pamsika-project.onrender.com/api/v1';
 
 const Api = {
   _token: null,
