@@ -77,7 +77,7 @@ async def health_check():
 
 
 # ── Serve frontend from same domain so cookies work ───────────────────────────
-FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../frontend"))
+FRONTEND_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "../frontend"))
 
 if os.path.isdir(FRONTEND_DIR):
     app.mount("/css", StaticFiles(directory=os.path.join(FRONTEND_DIR, "css")), name="css")
