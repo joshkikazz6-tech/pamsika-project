@@ -18,8 +18,8 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy backend application
 COPY . .
 
-# Copy frontend into the image so it can be served from the same domain
-COPY ../frontend ./frontend
+# ✅ FIXED: Copy frontend from inside backend
+COPY frontend ./frontend
 
 # Create uploads directory and set full ownership to appuser BEFORE switching user
 RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app
