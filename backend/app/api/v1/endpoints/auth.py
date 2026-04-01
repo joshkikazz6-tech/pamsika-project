@@ -57,7 +57,7 @@ async def register(
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",
+        path="/",
     )
 
     await log_action(db, "register", user_id=user.id, ip_address=get_client_ip(request))
@@ -96,7 +96,7 @@ async def login(
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",
+        path="/",
     )
 
     await log_action(db, "login", user_id=user.id, ip_address=get_client_ip(request))
@@ -135,14 +135,14 @@ async def refresh(
         secure=settings.COOKIE_SECURE,
         samesite=settings.COOKIE_SAMESITE,
         max_age=settings.REFRESH_TOKEN_EXPIRE_DAYS * 86400,
-        path="/api/v1/auth",
+        path="/",
     )
     return TokenResponse(access_token=new_access)
 
 
 @router.post("/logout")
 async def logout(response: Response, current_user: User = Depends(get_current_user)):
-    response.delete_cookie("refresh_token", path="/api/v1/auth")
+    response.delete_cookie("refresh_token", path="/")
     return {"detail": "Logged out"}
 
 
