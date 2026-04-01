@@ -15,8 +15,11 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
-# Copy application
+# Copy backend application
 COPY . .
+
+# Copy frontend into the image so it can be served from the same domain
+COPY ../frontend ./frontend
 
 # Create uploads directory and set full ownership to appuser BEFORE switching user
 RUN mkdir -p /app/uploads && chown -R appuser:appgroup /app
@@ -28,6 +31,4 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-# Keep workers=1 so alembic/seed run safely before the app starts.
-# Scale horizontally via docker-compose replicas if needed.
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
