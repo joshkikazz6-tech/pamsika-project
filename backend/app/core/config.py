@@ -40,6 +40,10 @@ class Settings(BaseSettings):
     # Frontend URL (used for generating affiliate/referral links)
     FRONTEND_URL: str = "https://pamsika.onrender.com"
 
+    # Email (SMTP for password reset)
+    SMTP_USER: str = "Pamsika8@gmail.com"
+    SMTP_PASSWORD: str = ""
+
     # Admin
     ADMIN_EMAIL: str = "admin@pamsika.mw"
 

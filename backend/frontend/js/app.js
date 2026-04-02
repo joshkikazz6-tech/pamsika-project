@@ -61,6 +61,31 @@ const Toast={
   }
 };
 
+
+/* ── CONFIRM DIALOG ───────────────────────────────────────── */
+const Confirm = {
+  show(message, opts = {}) {
+    return new Promise(resolve => {
+      const { title = 'Are you sure?', icon = '⚠️', iconColor = 'var(--gold)', okText = 'Confirm', okColor = 'var(--gold)', okBorder = 'var(--gold)' } = opts;
+      const id = 'confirm-' + Date.now();
+      const el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+      el.innerHTML = `<div style="background:var(--bg-card);border:1px solid var(--border-2);border-radius:var(--radius);padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+        <div style="font-size:2rem;color:${iconColor};margin-bottom:10px;">${icon}</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:8px;">${title}</div>
+        <div style="font-size:.82rem;color:var(--text-3);margin-bottom:22px;">${message}</div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button onclick="document.getElementById('${id}').remove();window['_cr_${id}'](false);" style="padding:9px 20px;border-radius:var(--radius-sm);border:1px solid var(--border-2);background:none;color:var(--text-2);cursor:pointer;font-size:.84rem;">Cancel</button>
+          <button onclick="document.getElementById('${id}').remove();window['_cr_${id}'](true);" style="padding:9px 20px;border-radius:var(--radius-sm);border:1px solid ${okBorder};background:none;color:${okColor};cursor:pointer;font-size:.84rem;font-weight:600;">${okText}</button>
+        </div>
+      </div>`;
+      window['_cr_' + id] = resolve;
+      document.body.appendChild(el);
+    });
+  }
+};
+
 /* ── MODAL ────────────────────────────────────────────────── */
 const Modal={
   open(id){const el=document.getElementById(id);if(!el)return;el.classList.add('open');document.body.classList.add('modal-open');},
@@ -1717,6 +1742,51 @@ const UI = {
   },
 
   openAuth(tab = 'login') { this._renderAuth(tab); Modal.open('auth-modal'); },
+  _renderForgot() {
+    const body = document.getElementById('auth-modal-body'); if (!body) return;
+    body.innerHTML = `<div style="text-align:center;margin-bottom:18px;">
+      <div style="font-size:1.8rem;margin-bottom:6px;">🔐</div>
+      <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:4px;">Forgot Password?</div>
+      <div style="font-size:.78rem;color:var(--text-3);">Enter your email and we'll send a reset link.</div>
+    </div>
+    <div><label class="form-lbl">Email</label><input id="forgot-email" type="email" placeholder="you@email.com" style="margin-top:5px;" onkeydown="if(event.key==='Enter')UI._submitForgot()"></div>
+    <button class="btn btn-gold" style="width:100%;margin-top:16px;" onclick="UI._submitForgot()">📧 Send Reset Link</button>
+    <p style="text-align:center;font-size:.74rem;color:var(--text-3);margin-top:12px;">
+      <span onclick="UI._renderAuth('login')" style="color:var(--gold);cursor:pointer;">← Back to Sign In</span>
+    </p>`;
+  },
+  async _submitReset() {
+    const pw = document.getElementById('reset-pw')?.value || '';
+    const pw2 = document.getElementById('reset-pw2')?.value || '';
+    if (!pw || !pw2) return Toast.show('Error', 'Fill in both fields', 'error', '⚠️');
+    if (pw !== pw2) return Toast.show('Error', 'Passwords do not match', 'error', '⚠️');
+    const btn = document.querySelector('#auth-modal-body .btn-gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Resetting…'; }
+    try {
+      await Api.post('/auth/reset-password', { token: UI._resetToken, password: pw });
+      Toast.show('Password reset!', 'You can now log in with your new password', 'success', '✅', 6000);
+      Modal.close('auth-modal');
+      setTimeout(() => UI.openAuth('login'), 1000);
+    } catch (e) {
+      Toast.show('Error', e.message, 'error', '⚠️');
+      if (btn) { btn.disabled = false; btn.textContent = '🔐 Reset Password'; }
+    }
+  },
+  async _submitForgot() {
+    const email = document.getElementById('forgot-email')?.value.trim();
+    if (!email) return Toast.show('Error', 'Enter your email', 'error', '⚠️');
+    const btn = document.querySelector('#auth-modal-body .btn-gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
+    try {
+      await Api.post('/auth/forgot-password', { email });
+      Toast.show('Email sent!', 'Check your inbox for the reset link', 'success', '📧', 6000);
+      Modal.close('auth-modal');
+    } catch (e) {
+      Toast.show('Error', e.message, 'error', '⚠️');
+    } finally {
+      if (btn) { btn.disabled = false; btn.textContent = '📧 Send Reset Link'; }
+    }
+  },
   _renderAuth(tab) {
     const body = document.getElementById('auth-modal-body'); if (!body) return;
     const isL = tab === 'login';
@@ -1731,7 +1801,7 @@ const UI = {
       </div>
       <button class="btn btn-gold" style="width:100%;margin-top:16px;" onclick="UI._submitAuth('${tab}')">${isL ? '🔓 Sign In' : '🚀 Create Account'}</button>
       <p style="text-align:center;font-size:.74rem;color:var(--text-3);margin-top:12px;">
-        ${isL ? `No account? <span onclick="UI._renderAuth('register')" style="color:var(--gold);cursor:pointer;">Register free</span>` : `Have account? <span onclick="UI._renderAuth('login')" style="color:var(--gold);cursor:pointer;">Sign in</span>`}
+        ${isL ? `No account? <span onclick="UI._renderAuth('register')" style="color:var(--gold);cursor:pointer;">Register free</span> · <span onclick="UI._renderForgot()" style="color:var(--text-3);cursor:pointer;">Forgot password?</span>` : `Have account? <span onclick="UI._renderAuth('login')" style="color:var(--gold);cursor:pointer;">Sign in</span>`}
       </p>`;
   },
   async _submitAuth(tab) {
@@ -1906,4 +1976,25 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('pwa-dismiss')?.addEventListener('click', () => document.getElementById('pwa-banner')?.classList.remove('show'));
 
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
+
+  // Handle password reset link (?token=...)
+  const _resetToken = new URLSearchParams(window.location.search).get('token');
+  if (_resetToken) {
+    setTimeout(() => {
+      const body = document.getElementById('auth-modal-body'); 
+      Modal.open('auth-modal');
+      if (!body) return;
+      body.innerHTML = `<div style="text-align:center;margin-bottom:18px;">
+        <div style="font-size:1.8rem;margin-bottom:6px;">🔑</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:4px;">Set New Password</div>
+      </div>
+      <div class="form-row">
+        <div><label class="form-lbl">New Password</label><input id="reset-pw" type="password" placeholder="Min 8 chars, 1 uppercase, 1 number" style="margin-top:5px;"></div>
+        <div><label class="form-lbl">Confirm Password</label><input id="reset-pw2" type="password" placeholder="Repeat password" style="margin-top:5px;" onkeydown="if(event.key==='Enter')UI._submitReset()"></div>
+      </div>
+      <button class="btn btn-gold" style="width:100%;margin-top:16px;" onclick="UI._submitReset()">🔐 Reset Password</button>`;
+      UI._resetToken = _resetToken;
+      history.replaceState({}, '', '/');
+    }, 800);
+  }
 });

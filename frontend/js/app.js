@@ -61,6 +61,31 @@ const Toast={
   }
 };
 
+
+/* ── CONFIRM DIALOG ───────────────────────────────────────── */
+const Confirm = {
+  show(message, opts = {}) {
+    return new Promise(resolve => {
+      const { title = 'Are you sure?', icon = '⚠️', iconColor = 'var(--gold)', okText = 'Confirm', okColor = 'var(--gold)', okBorder = 'var(--gold)' } = opts;
+      const id = 'confirm-' + Date.now();
+      const el = document.createElement('div');
+      el.id = id;
+      el.style.cssText = 'position:fixed;inset:0;z-index:9999;background:rgba(0,0,0,.7);display:flex;align-items:center;justify-content:center;padding:20px;';
+      el.innerHTML = `<div style="background:var(--bg-card);border:1px solid var(--border-2);border-radius:var(--radius);padding:28px 24px;max-width:360px;width:100%;text-align:center;">
+        <div style="font-size:2rem;color:${iconColor};margin-bottom:10px;">${icon}</div>
+        <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:8px;">${title}</div>
+        <div style="font-size:.82rem;color:var(--text-3);margin-bottom:22px;">${message}</div>
+        <div style="display:flex;gap:10px;justify-content:center;">
+          <button onclick="document.getElementById('${id}').remove();window['_cr_${id}'](false);" style="padding:9px 20px;border-radius:var(--radius-sm);border:1px solid var(--border-2);background:none;color:var(--text-2);cursor:pointer;font-size:.84rem;">Cancel</button>
+          <button onclick="document.getElementById('${id}').remove();window['_cr_${id}'](true);" style="padding:9px 20px;border-radius:var(--radius-sm);border:1px solid ${okBorder};background:none;color:${okColor};cursor:pointer;font-size:.84rem;font-weight:600;">${okText}</button>
+        </div>
+      </div>`;
+      window['_cr_' + id] = resolve;
+      document.body.appendChild(el);
+    });
+  }
+};
+
 /* ── MODAL ────────────────────────────────────────────────── */
 const Modal={
   open(id){const el=document.getElementById(id);if(!el)return;el.classList.add('open');document.body.classList.add('modal-open');},
@@ -172,8 +197,8 @@ const Cart = {
 
   _badge() {
     const n = this.items.reduce((s, i) => s + i.qty, 0);
-    const b = document.getElementById('cart-badge');
-    if (b) { b.textContent = n > 99 ? '99+' : n; b.style.display = n > 0 ? 'flex' : 'none'; }
+    const label = n > 99 ? '99+' : n;
+    ['cart-badge','cart-badge-b'].forEach(id => { const b = document.getElementById(id); if (b) { b.textContent = label; b.style.display = n > 0 ? 'flex' : 'none'; } });
   },
 
   async add(product, qty = 1) {
@@ -277,8 +302,8 @@ const Favs = {
   },
 
   _badge() {
-    const b = document.getElementById('fav-badge');
-    if (b) { b.textContent = this.ids.length; b.style.display = this.ids.length > 0 ? 'flex' : 'none'; }
+    const n = this.ids.length;
+    ['fav-badge','fav-badge-b'].forEach(id => { const b = document.getElementById(id); if (b) { b.textContent = n; b.style.display = n > 0 ? 'flex' : 'none'; } });
   },
 
   has(id) { return this.ids.includes(String(id)); },
@@ -495,6 +520,16 @@ const Products = {
 
       if (this.state.sort === 'hot') items = [...items.filter(p => p.badge === 'HOT'), ...items.filter(p => p.badge !== 'HOT')];
       else if (this.state.sort === 'new') items = [...items.filter(p => p.badge === 'NEW'), ...items.filter(p => p.badge !== 'NEW')];
+      else if (this.state.sort === 'newest' && this.state.cat === 'All Items' && !this.state.search) {
+        // Shuffle within each category so every refresh shows a different mix
+        const groups = {};
+        items.forEach(p => { const c = p.category || 'Other'; (groups[c] = groups[c] || []).push(p); });
+        Object.values(groups).forEach(g => { for (let i = g.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; } });
+        const cats = Object.keys(groups).sort();
+        items = [];
+        const maxLen = Math.max(...cats.map(c => groups[c].length));
+        for (let i = 0; i < maxLen; i++) cats.forEach(c => { if (groups[c][i]) items.push(groups[c][i]); });
+      }
 
       this._data = items;
       this._total = data.total || items.length;
@@ -1212,7 +1247,7 @@ const Admin = {
 
   checkCombo(key) {
     this._combo.push(key); if (this._combo.length > CFG.adminCombo.length) this._combo.shift();
-    if (this._combo.join('') === CFG.adminCombo.join('')) { this._combo = []; if (Auth.user?.is_admin) this.open(); else Toast.show('Access denied', 'Admin privileges required', 'error', '🚫'); }
+    if (this._combo.join('') === CFG.adminCombo.join('')) { this._combo = []; if (Auth.user?.is_admin) { localStorage.setItem(this.KEY, 'true'); this.open(); } else Toast.show('Access denied', 'Admin privileges required', 'error', '🚫'); }
   },
 
   open() {
@@ -1747,6 +1782,7 @@ const UI = {
     }
     // If the logged-in user is an admin, open the admin panel immediately
     if (Auth.user?.is_admin) {
+      localStorage.setItem(Admin.KEY, 'true');
       Admin._pendingOpen = false;
       setTimeout(() => Admin.open(), 300);
       await Favs.load();
@@ -1894,5 +1930,5 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('pwa-install-btn')?.addEventListener('click', async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; document.getElementById('pwa-banner')?.classList.remove('show'); });
   document.getElementById('pwa-dismiss')?.addEventListener('click', () => document.getElementById('pwa-banner')?.classList.remove('show'));
 
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('./service-worker.js').catch(() => {});
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/service-worker.js').catch(() => {});
 });

@@ -1,5 +1,5 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, products, cart, orders, favorites, affiliate, admin, analytics, imgproxy, upload
+from app.api.v1.endpoints import auth, products, cart, orders, favorites, affiliate, admin, analytics, imgproxy, upload, password_reset
 
 api_router = APIRouter(prefix="/v1")
 
@@ -13,3 +13,4 @@ api_router.include_router(admin.router)
 api_router.include_router(analytics.router)
 api_router.include_router(imgproxy.router)
 api_router.include_router(upload.router)
+api_router.include_router(password_reset.router)
