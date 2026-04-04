@@ -7,6 +7,7 @@ Create Date: 2024-01-01 00:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
+from sqlalchemy import text
 from sqlalchemy.dialects import postgresql
 
 revision = "0001_initial"
@@ -16,180 +17,172 @@ depends_on = None
 
 
 def upgrade() -> None:
-    # users
-    op.create_table(
-        "users",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("email", sa.String(255), nullable=False),
-        sa.Column("password_hash", sa.String(255), nullable=False),
-        sa.Column("full_name", sa.String(255), nullable=False),
-        sa.Column("is_active", sa.Boolean(), default=True, nullable=False),
-        sa.Column("is_admin", sa.Boolean(), default=False, nullable=False),
-        sa.Column("is_affiliate", sa.Boolean(), default=False, nullable=False),
-        sa.Column("affiliate_id", sa.String(64), nullable=True),
-        sa.Column("affiliate_clicks", sa.Integer(), default=0, nullable=False),
-        sa.Column("affiliate_sales", sa.Integer(), default=0, nullable=False),
-        sa.Column("affiliate_commission_balance", sa.Float(), default=0.0, nullable=False),
-        sa.Column("referred_by", sa.String(64), nullable=True),
-        sa.Column("last_login_ip", sa.String(45), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_users_email", "users", ["email"], unique=True)
-    op.create_index("ix_users_affiliate_id", "users", ["affiliate_id"], unique=True)
-    op.create_index("ix_users_referred_by", "users", ["referred_by"])
+    conn = op.get_bind()
 
-    # products
-    op.create_table(
-        "products",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("name", sa.String(255), nullable=False),
-        sa.Column("description", sa.Text(), nullable=False),
-        sa.Column("price", sa.Float(), nullable=False),
-        sa.Column("category", sa.String(100), nullable=False),
-        sa.Column("subcategory", sa.String(100), nullable=True),
-        sa.Column("location", sa.String(100), nullable=True),
-        sa.Column("images", sa.JSON(), nullable=False),
-        sa.Column("views", sa.Integer(), default=0, nullable=False),
-        sa.Column("likes", sa.Integer(), default=0, nullable=False),
-        sa.Column("commission_percent", sa.Float(), default=5.0, nullable=False),
-        sa.Column("badge", sa.String(20), nullable=True),
-        sa.Column("is_active", sa.Boolean(), default=True, nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_products_category", "products", ["category"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS users (
+            id UUID PRIMARY KEY,
+            email VARCHAR(255) NOT NULL,
+            password_hash VARCHAR(255) NOT NULL,
+            full_name VARCHAR(255) NOT NULL,
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            is_admin BOOLEAN NOT NULL DEFAULT FALSE,
+            is_affiliate BOOLEAN NOT NULL DEFAULT FALSE,
+            affiliate_id VARCHAR(64),
+            affiliate_clicks INTEGER NOT NULL DEFAULT 0,
+            affiliate_sales INTEGER NOT NULL DEFAULT 0,
+            affiliate_commission_balance FLOAT NOT NULL DEFAULT 0.0,
+            referred_by VARCHAR(64),
+            last_login_ip VARCHAR(45),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now(),
+            deleted_at TIMESTAMPTZ
+        )
+    """))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_email ON users(email)"))
+    conn.execute(text("CREATE UNIQUE INDEX IF NOT EXISTS ix_users_affiliate_id ON users(affiliate_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_users_referred_by ON users(referred_by)"))
 
-    # carts
-    op.create_table(
-        "carts",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=True),
-        sa.Column("session_id", sa.String(128), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-    )
-    op.create_index("ix_carts_user_id", "carts", ["user_id"])
-    op.create_index("ix_carts_session_id", "carts", ["session_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS products (
+            id UUID PRIMARY KEY,
+            name VARCHAR(255) NOT NULL,
+            description TEXT NOT NULL,
+            price FLOAT NOT NULL,
+            category VARCHAR(100) NOT NULL,
+            subcategory VARCHAR(100),
+            location VARCHAR(100),
+            images JSON NOT NULL,
+            views INTEGER NOT NULL DEFAULT 0,
+            likes INTEGER NOT NULL DEFAULT 0,
+            commission_percent FLOAT NOT NULL DEFAULT 5.0,
+            badge VARCHAR(20),
+            is_active BOOLEAN NOT NULL DEFAULT TRUE,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now(),
+            deleted_at TIMESTAMPTZ
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_products_category ON products(category)"))
 
-    # cart_items
-    op.create_table(
-        "cart_items",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("cart_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("carts.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("quantity", sa.Integer(), nullable=False),
-        sa.Column("price_at_add", sa.Float(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-    )
-    op.create_index("ix_cart_items_product_id", "cart_items", ["product_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS carts (
+            id UUID PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE CASCADE,
+            session_id VARCHAR(128),
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_user_id ON carts(user_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_carts_session_id ON carts(session_id)"))
 
-    # orders
-    op.create_table(
-        "orders",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("total_amount", sa.Float(), nullable=False),
-        sa.Column("payment_method", sa.String(50), nullable=False),
-        sa.Column("status", sa.String(50), default="pending", nullable=False),
-        sa.Column("contact_info", sa.JSON(), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("updated_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_orders_user_id", "orders", ["user_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS cart_items (
+            id UUID PRIMARY KEY,
+            cart_id UUID NOT NULL REFERENCES carts(id) ON DELETE CASCADE,
+            product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            quantity INTEGER NOT NULL,
+            price_at_add FLOAT NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT now()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_cart_items_product_id ON cart_items(product_id)"))
 
-    # order_items
-    op.create_table(
-        "order_items",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("order_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("orders.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("products.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("product_snapshot", sa.JSON(), nullable=False),
-        sa.Column("quantity", sa.Integer(), nullable=False),
-        sa.Column("unit_price", sa.Float(), nullable=False),
-        sa.Column("affiliate_id", sa.String(64), nullable=True),
-    )
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS orders (
+            id UUID PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            total_amount FLOAT NOT NULL,
+            payment_method VARCHAR(50) NOT NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'pending',
+            contact_info JSON NOT NULL,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            updated_at TIMESTAMPTZ DEFAULT now(),
+            deleted_at TIMESTAMPTZ
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_orders_user_id ON orders(user_id)"))
 
-    # favorites
-    op.create_table(
-        "favorites",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.UniqueConstraint("user_id", "product_id", name="uq_user_product_fav"),
-    )
-    op.create_index("ix_favorites_user_id", "favorites", ["user_id"])
-    op.create_index("ix_favorites_product_id", "favorites", ["product_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS order_items (
+            id UUID PRIMARY KEY,
+            order_id UUID NOT NULL REFERENCES orders(id) ON DELETE CASCADE,
+            product_id UUID REFERENCES products(id) ON DELETE SET NULL,
+            product_snapshot JSON NOT NULL,
+            quantity INTEGER NOT NULL,
+            unit_price FLOAT NOT NULL,
+            affiliate_id VARCHAR(64)
+        )
+    """))
 
-    # affiliate_clicks
-    op.create_table(
-        "affiliate_clicks",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("affiliate_id", sa.String(64), nullable=False),
-        sa.Column("product_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("products.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("ip_address", sa.String(45), nullable=False),
-        sa.Column("user_agent", sa.String(512), nullable=True),
-        sa.Column("clicked_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-    )
-    op.create_index("ix_affiliate_clicks_affiliate_id", "affiliate_clicks", ["affiliate_id"])
-    op.create_index("ix_affiliate_clicks_product_id", "affiliate_clicks", ["product_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS favorites (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            UNIQUE (user_id, product_id)
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_favorites_user_id ON favorites(user_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_favorites_product_id ON favorites(product_id)"))
 
-    # affiliate_withdrawals
-    op.create_table(
-        "affiliate_withdrawals",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="CASCADE"), nullable=False),
-        sa.Column("amount", sa.Float(), nullable=False),
-        sa.Column("method", sa.String(50), nullable=False),
-        sa.Column("encrypted_payout_details", sa.Text(), nullable=False),
-        sa.Column("status", sa.String(50), default="pending", nullable=False),
-        sa.Column("admin_note", sa.Text(), nullable=True),
-        sa.Column("reviewed_by", postgresql.UUID(as_uuid=True), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-        sa.Column("reviewed_at", sa.DateTime(timezone=True), nullable=True),
-        sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),
-    )
-    op.create_index("ix_affiliate_withdrawals_user_id", "affiliate_withdrawals", ["user_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS affiliate_clicks (
+            id UUID PRIMARY KEY,
+            affiliate_id VARCHAR(64) NOT NULL,
+            product_id UUID NOT NULL REFERENCES products(id) ON DELETE CASCADE,
+            ip_address VARCHAR(45) NOT NULL,
+            user_agent VARCHAR(512),
+            clicked_at TIMESTAMPTZ DEFAULT now()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_affiliate_clicks_affiliate_id ON affiliate_clicks(affiliate_id)"))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_affiliate_clicks_product_id ON affiliate_clicks(product_id)"))
 
-    # audit_logs
-    op.create_table(
-        "audit_logs",
-        sa.Column("id", postgresql.UUID(as_uuid=True), primary_key=True),
-        sa.Column("user_id", postgresql.UUID(as_uuid=True),
-                  sa.ForeignKey("users.id", ondelete="SET NULL"), nullable=True),
-        sa.Column("action", sa.String(100), nullable=False),
-        sa.Column("resource", sa.String(100), nullable=True),
-        sa.Column("resource_id", sa.String(100), nullable=True),
-        sa.Column("ip_address", sa.String(45), nullable=True),
-        sa.Column("user_agent", sa.String(512), nullable=True),
-        sa.Column("metadata", sa.JSON(), nullable=True),
-        sa.Column("created_at", sa.DateTime(timezone=True), server_default=sa.func.now()),
-    )
-    op.create_index("ix_audit_logs_user_id", "audit_logs", ["user_id"])
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS affiliate_withdrawals (
+            id UUID PRIMARY KEY,
+            user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+            amount FLOAT NOT NULL,
+            method VARCHAR(50) NOT NULL,
+            encrypted_payout_details TEXT NOT NULL,
+            status VARCHAR(50) NOT NULL DEFAULT 'pending',
+            admin_note TEXT,
+            reviewed_by UUID,
+            created_at TIMESTAMPTZ DEFAULT now(),
+            reviewed_at TIMESTAMPTZ,
+            deleted_at TIMESTAMPTZ
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_affiliate_withdrawals_user_id ON affiliate_withdrawals(user_id)"))
+
+    conn.execute(text("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id UUID PRIMARY KEY,
+            user_id UUID REFERENCES users(id) ON DELETE SET NULL,
+            action VARCHAR(100) NOT NULL,
+            resource VARCHAR(100),
+            resource_id VARCHAR(100),
+            ip_address VARCHAR(45),
+            user_agent VARCHAR(512),
+            metadata JSON,
+            created_at TIMESTAMPTZ DEFAULT now()
+        )
+    """))
+    conn.execute(text("CREATE INDEX IF NOT EXISTS ix_audit_logs_user_id ON audit_logs(user_id)"))
 
 
 def downgrade() -> None:
-    op.drop_table("audit_logs")
-    op.drop_table("affiliate_withdrawals")
-    op.drop_table("affiliate_clicks")
-    op.drop_table("favorites")
-    op.drop_table("order_items")
-    op.drop_table("orders")
-    op.drop_table("cart_items")
-    op.drop_table("carts")
-    op.drop_table("products")
-    op.drop_table("users")
+    conn = op.get_bind()
+    conn.execute(text("DROP TABLE IF EXISTS audit_logs CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS affiliate_withdrawals CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS affiliate_clicks CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS favorites CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS order_items CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS orders CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS cart_items CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS carts CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS products CASCADE"))
+    conn.execute(text("DROP TABLE IF EXISTS users CASCADE"))
