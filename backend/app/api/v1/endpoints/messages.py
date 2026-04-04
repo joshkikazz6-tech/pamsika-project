@@ -77,7 +77,7 @@ async def my_conversations(db: AsyncSession = Depends(get_db), current_user: Use
     result = await db.execute(
         select(Conversation)
         .where(Conversation.user_id == current_user.id)
-        .options(selectinload(Conversation.messages), selectinload(Conversation.order))
+        .options(selectinload(Conversation.messages))
         .order_by(Conversation.updated_at.desc())
     )
     return [_serialize_conv(c, current_user.id) for c in result.scalars().all()]
@@ -119,7 +119,7 @@ async def start_conversation(payload: dict, db: AsyncSession = Depends(get_db), 
 async def all_conversations(db: AsyncSession = Depends(get_db), admin: User = Depends(get_current_admin)):
     result = await db.execute(
         select(Conversation)
-        .options(selectinload(Conversation.messages), selectinload(Conversation.user), selectinload(Conversation.order))
+        .options(selectinload(Conversation.messages), selectinload(Conversation.user))
         .order_by(Conversation.updated_at.desc())
     )
     return [_serialize_conv(c, admin.id, is_admin=True) for c in result.scalars().all()]
@@ -185,7 +185,7 @@ async def admin_start_conversation(payload: dict, db: AsyncSession = Depends(get
 async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
-        .options(selectinload(Conversation.messages).selectinload(Message.sender), selectinload(Conversation.order))
+        .options(selectinload(Conversation.messages).selectinload(Message.sender))
     )
     conv = result.scalar_one_or_none()
     if not conv:
