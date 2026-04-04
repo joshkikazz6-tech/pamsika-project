@@ -405,7 +405,9 @@ const Messages = {
 
   async openConversation(convId, silent = false) {
     this._activeConv = convId;
-    this._replyMedia = [];
+    // Save any in-progress reply text so polling doesn't wipe it
+    const draftText = document.getElementById('msg-reply-input')?.value || '';
+    if (!silent) this._replyMedia = [];
     try {
       const conv = await Api.getConversation(convId);
       const el = document.getElementById('messages-thread');
@@ -453,7 +455,17 @@ const Messages = {
         </div>`;
 
       const body = document.getElementById('msg-thread-body');
-      if (body) body.scrollTop = body.scrollHeight;
+      // Only auto-scroll on initial open, not on silent poll refreshes
+      if (body && !silent) body.scrollTop = body.scrollHeight;
+      // Restore any in-progress reply draft after re-render
+      if (draftText) {
+        const inp = document.getElementById('msg-reply-input');
+        if (inp) {
+          inp.value = draftText;
+          inp.style.height = 'auto';
+          inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        }
+      }
     } catch(e) { if (!silent) Toast.show('Error', e.message, 'error', '⚠️'); }
   },
 

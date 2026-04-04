@@ -237,55 +237,58 @@ async def create_direct_order(
         raise HTTPException(status_code=500, detail="Order creation failed: no items persisted")
 
     # ── Auto-DM admin: create a system conversation for every direct order ──
-    try:
-        order_ref = contact_info.get("reference", str(saved.id)[:8].upper())
-        customer_name = contact_info.get("name", "Guest")
-        customer_phone = contact_info.get("phone", "")
-        channel_label = {"whatsapp": "WhatsApp", "messenger": "Facebook Messenger", "email": "Email"}.get(
-            payment_method, payment_method.title()
+    # Build all content from already-loaded ORM objects (no lazy loads after this point)
+    order_ref = contact_info.get("reference", str(saved.id)[:8].upper())
+    customer_name = contact_info.get("name", "Guest")
+    customer_phone = contact_info.get("phone", "")
+    channel_label = {"whatsapp": "WhatsApp", "messenger": "Facebook Messenger", "email": "Email"}.get(
+        payment_method, payment_method.title()
+    )
+    item_lines = "\n".join(
+        f"  • {i.product_snapshot.get('name', 'Item')} x{i.quantity} — MWK {i.unit_price:,.0f}"
+        for i in saved.items
+    )
+    auto_msg = (
+        f"🛒 NEW ORDER via {channel_label}\n\n"
+        f"Order Ref: #{order_ref}\n"
+        f"Customer: {customer_name}"
+        + (f" | 📞 {customer_phone}" if customer_phone else "") + "\n\n"
+        f"Items:\n{item_lines}\n\n"
+        f"Total: MWK {saved.total_amount:,.0f}\n"
+        f"Status: {saved.status.upper()}"
+    )
+    # Find the admin user within the same async session (safe — no greenlet issue)
+    admin_result = await db.execute(
+        select(User).where(User.is_admin == True, User.is_active == True, User.deleted_at.is_(None)).limit(1)
+    )
+    admin_user = admin_result.scalar_one_or_none()
+    new_conv_id = None
+    if admin_user:
+        # Link to the registered customer if logged in, else use admin as owner (self-note)
+        conv_user_id = current_user.id if current_user else admin_user.id
+        new_conv = Conversation(
+            user_id=conv_user_id,
+            order_id=saved.id,
+            subject=f"Order #{order_ref} via {channel_label}",
         )
-        item_lines = "\n".join(
-            f"  • {i.product_snapshot.get('name', 'Item')} x{i.quantity} — MWK {i.unit_price:,.0f}"
-            for i in saved.items
-        )
-        auto_msg = (
-            f"🛒 NEW ORDER via {channel_label}\n\n"
-            f"Order Ref: #{order_ref}\n"
-            f"Customer: {customer_name}"
-            + (f" | 📞 {customer_phone}" if customer_phone else "") + "\n\n"
-            f"Items:\n{item_lines}\n\n"
-            f"Total: MWK {saved.total_amount:,.0f}\n"
-            f"Status: {saved.status.upper()}"
-        )
-        # Find the admin user (first active admin)
-        admin_result = await db.execute(
-            select(User).where(User.is_admin == True, User.is_active == True, User.deleted_at.is_(None)).limit(1)
-        )
-        admin_user = admin_result.scalar_one_or_none()
-        if admin_user:
-            # If the customer is a registered user, link the conversation to them;
-            # otherwise use the admin as the conversation owner (admin-to-self note)
-            conv_user_id = current_user.id if current_user else admin_user.id
-            new_conv = Conversation(
-                user_id=conv_user_id,
-                order_id=saved.id,
-                subject=f"Order #{order_ref} via {channel_label}",
-            )
-            db.add(new_conv)
-            await db.flush()
-            db.add(Message(
-                conversation_id=new_conv.id,
-                sender_id=admin_user.id,
-                content_enc=encrypt_data(auto_msg),
-                is_admin=True,
-            ))
-            await db.flush()
-            # Fire email notification to admin
+        db.add(new_conv)
+        await db.flush()
+        db.add(Message(
+            conversation_id=new_conv.id,
+            sender_id=admin_user.id,
+            content_enc=encrypt_data(auto_msg),
+            is_admin=True,
+        ))
+        await db.flush()
+        new_conv_id = str(new_conv.id)
+    # NOTE: commit is handled by get_db() context manager on session exit.
+    # Email notify fires after response — import here to avoid circular at module level
+    if new_conv_id:
+        try:
             from app.api.v1.endpoints.messages import _notify_admin
-            from app.core.config import settings
-            await _notify_admin(f"Order #{order_ref} ({channel_label})", auto_msg, str(new_conv.id))
-    except Exception:
-        pass  # Never block the order response due to DM failure
+            await _notify_admin(f"Order #{order_ref} ({channel_label})", auto_msg, new_conv_id)
+        except Exception:
+            pass  # Never block the order response due to email failure
 
     # Return plain dict so no Pydantic auth validation blocks guest responses
     return {
