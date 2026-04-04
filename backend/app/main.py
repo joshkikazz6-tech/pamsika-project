@@ -144,6 +144,7 @@ async def _fix_schema():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    import asyncio
     # Create standard tables
     try:
         async with engine.begin() as conn:
@@ -151,8 +152,13 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"create_all: {e}")
 
-    # Fix community + messages schema (each SQL in its own transaction)
-    await _fix_schema()
+    # Fix schema with a timeout so startup never hangs
+    try:
+        await asyncio.wait_for(_fix_schema(), timeout=20.0)
+    except asyncio.TimeoutError:
+        logger.warning("_fix_schema timed out — skipping")
+    except Exception as e:
+        logger.warning(f"_fix_schema error: {e}")
 
     yield
     await engine.dispose()
