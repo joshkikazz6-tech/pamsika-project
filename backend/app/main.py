@@ -17,8 +17,10 @@ from slowapi.errors import RateLimitExceeded
 from app.core.config import settings
 from app.api.v1.router import api_router
 from app.middleware.security import SecurityHeadersMiddleware
+import sqlalchemy as sa
 from app.db.session import engine
 from app.db.base import Base
+logger = logging.getLogger(__name__)
 # Register ALL models with Base.metadata before create_all runs
 from app.models.user import User                                           # noqa
 from app.models.product import Product                                     # noqa
@@ -40,7 +42,45 @@ logging.getLogger("uvicorn.access").addFilter(_SuppressHealthCheck())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Tables are created/migrated by: alembic upgrade head (runs in Dockerfile CMD)
+    async with engine.begin() as conn:
+        # Create tables that don't exist yet
+        try:
+            await conn.run_sync(Base.metadata.create_all, checkfirst=True)
+        except Exception:
+            pass
+
+        # Fix dm_messages: rename 'content' -> 'content_enc', add 'media_enc'
+        # This handles databases created before the encryption refactor
+        try:
+            await conn.execute(sa.text(
+                "ALTER TABLE dm_messages RENAME COLUMN content TO content_enc"
+            ))
+            logger.info("Migrated dm_messages.content -> content_enc")
+        except Exception:
+            pass  # column already renamed or doesn't exist
+
+        try:
+            await conn.execute(sa.text(
+                "ALTER TABLE dm_messages ADD COLUMN IF NOT EXISTS media_enc TEXT"
+            ))
+        except Exception:
+            pass
+
+        # Ensure community tables have all required columns
+        try:
+            await conn.execute(sa.text(
+                "ALTER TABLE community_posts ADD COLUMN IF NOT EXISTS images JSON NOT NULL DEFAULT '[]'"
+            ))
+        except Exception:
+            pass
+
+        try:
+            await conn.execute(sa.text(
+                "ALTER TABLE community_comments ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ"
+            ))
+        except Exception:
+            pass
+
     yield
     await engine.dispose()
 
