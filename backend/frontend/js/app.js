@@ -1498,9 +1498,9 @@ const Admin = {
     const pending = list.filter(o => (o.status || 'pending') === 'pending').length;
     return `<div class="admin-head"><h2>Orders</h2><p>${list.length} total · <span style="color:var(--gold);">${pending} pending</span></p>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-        <button class="aff-copy-btn" onclick="Api.exportOrders('csv')" style="font-size:.66rem;">📄 Export CSV</button>
-        <button class="aff-copy-btn" onclick="Api.exportOrders('excel')" style="font-size:.66rem;">📊 Export Excel</button>
-        <button class="aff-copy-btn" onclick="Api.exportOrders('pdf')" style="font-size:.66rem;">📋 Export PDF</button>
+        <button class="aff-copy-btn" onclick="Api.exportOrders('csv').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📄 Export CSV</button>
+        <button class="aff-copy-btn" onclick="Api.exportOrders('excel').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📊 Export Excel</button>
+        <button class="aff-copy-btn" onclick="Api.exportOrders('pdf').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📋 Export PDF</button>
       </div>
     </div>
       <p style="font-size:.68rem;color:var(--text-3);margin-bottom:10px;">💼 <strong>Commission flow:</strong> <span style="color:var(--teal);">✓ Done</span> = marks fulfilled &amp; credits affiliate commission. <span style="color:orange;">✕ Cancel</span> = cancels order &amp; reverses any credited commission. <span style="color:var(--red);">🗑</span> = removes from this panel only.</p>
@@ -1612,9 +1612,9 @@ const Admin = {
     const pending = wds.filter(w => w.status === 'pending').length;
     return `<div class="admin-head"><h2>Withdrawal Requests</h2><p>${pending} pending</p>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
-        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('csv')" style="font-size:.66rem;">📄 Export CSV</button>
-        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('excel')" style="font-size:.66rem;">📊 Export Excel</button>
-        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('pdf')" style="font-size:.66rem;">📋 Export PDF</button>
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('csv').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📄 Export CSV</button>
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('excel').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📊 Export Excel</button>
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('pdf').catch(e=>Toast.show('Error',e.message,'error','⚠️'))" style="font-size:.66rem;">📋 Export PDF</button>
       </div></div>
       ${!wds.length ? '<p style="color:var(--text-3);font-size:.8rem;padding:16px 0;">No requests yet.</p>' : `
       <div style="overflow-x:auto;"><table class="admin-table">
@@ -1704,15 +1704,16 @@ const Admin = {
 
   async _notifPanel() {
     const countData = await Api.notificationCount().catch(() => ({ count: 0 }));
-    return `<div class="admin-head"><h2>🔔 Push Notifications</h2><p>${countData.count} subscribers</p></div>
+    return `<div class="admin-head"><h2>🔔 Notifications</h2><p>📧 ${countData.count} registered users · 🔔 ${countData.push_subscribers || 0} push subscribers</p></div>
       <div style="background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
-        <div style="font-size:.78rem;font-weight:600;margin-bottom:10px;">Send Notification to All Users</div>
+        <div style="font-size:.78rem;font-weight:600;margin-bottom:4px;">Send Email to ALL Users</div>
+        <div style="font-size:.72rem;color:var(--text-3);margin-bottom:10px;">Every registered user will receive this in their inbox + push notification if subscribed</div>
         <div style="display:grid;gap:8px;margin-bottom:8px;">
           <div><label class="form-lbl">Title</label><input id="notif-title" placeholder="New product added!" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
           <div><label class="form-lbl">Message</label><input id="notif-body" placeholder="Check out our latest listings" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
           <div><label class="form-lbl">Link (optional)</label><input id="notif-url" placeholder="/" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
         </div>
-        <button class="btn btn-gold btn-sm" onclick="Admin._sendNotif()">🔔 Send to All Subscribers</button>
+        <button class="btn btn-gold btn-sm" onclick="Admin._sendNotif()">🔔 Send to All Users</button>
       </div>`;
   },
 
@@ -1721,10 +1722,16 @@ const Admin = {
     const body = document.getElementById('notif-body')?.value.trim();
     const url = document.getElementById('notif-url')?.value.trim() || '/';
     if (!title || !body) return Toast.show('Error', 'Fill title and message', 'error', '⚠️');
+    const btn = document.querySelector('#admin-content .btn-gold');
+    if (btn) { btn.disabled = true; btn.textContent = '⏳ Sending…'; }
     try {
       const res = await Api.broadcastNotification(title, body, url);
-      Toast.show('Sent!', `Delivered to ${res.sent} subscribers`, 'success', '🔔');
-    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+      Toast.show('Sent! 🔔', `Emailed ${res.emails_sent}/${res.users_total} users · Push: ${res.push_sent}`, 'success', '✅', 6000);
+      if (btn) { btn.disabled = false; btn.textContent = '🔔 Send to All Users'; }
+    } catch(e) {
+      Toast.show('Error', e.message, 'error', '⚠️');
+      if (btn) { btn.disabled = false; btn.textContent = '🔔 Send to All Users'; }
+    }
   },
 
   async _clearAllOrders() {

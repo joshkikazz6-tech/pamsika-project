@@ -225,7 +225,23 @@ const Api = {
   async notificationCount() { return this.get('/notifications/count'); },
 
   // ── Export ────────────────────────────────────────────────
-  exportOrders(fmt) { window.open(API_BASE + '/admin/export/orders?fmt=' + fmt, '_blank'); },
-  exportWithdrawals(fmt) { window.open(API_BASE + '/admin/export/withdrawals?fmt=' + fmt, '_blank'); },
+  async exportOrders(fmt) {
+    const res = await fetch(API_BASE + '/admin/export/orders?fmt=' + fmt, { headers: { 'Authorization': 'Bearer ' + this._token } });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || 'Export failed'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'pamsika_orders_' + new Date().toISOString().slice(0,10) + '.' + fmt;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  },
+  async exportWithdrawals(fmt) {
+    const res = await fetch(API_BASE + '/admin/export/withdrawals?fmt=' + fmt, { headers: { 'Authorization': 'Bearer ' + this._token } });
+    if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.detail || 'Export failed'); }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a'); a.href = url;
+    a.download = 'pamsika_withdrawals_' + new Date().toISOString().slice(0,10) + '.' + fmt;
+    document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+  },
 
 };
