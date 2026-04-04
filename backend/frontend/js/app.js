@@ -1206,7 +1206,7 @@ const Products = {
         Object.values(groups).forEach(g => { for (let i = g.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [g[i], g[j]] = [g[j], g[i]]; } });
         const cats = Object.keys(groups).sort();
         items = [];
-        const maxLen = Math.max(...cats.map(c => groups[c].length));
+        const maxLen = cats.length ? Math.max(...cats.map(c => groups[c].length)) : 0;
         for (let i = 0; i < maxLen; i++) cats.forEach(c => { if (groups[c][i]) items.push(groups[c][i]); });
       }
 
