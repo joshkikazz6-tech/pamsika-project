@@ -19,6 +19,7 @@ from app.api.v1.router import api_router
 from app.middleware.security import SecurityHeadersMiddleware
 from app.db.session import engine
 from app.db.base import Base
+import app.db  # noqa — registers all models with Base.metadata
 
 
 class _SuppressHealthCheck(logging.Filter):

@@ -7,3 +7,5 @@ from app.models.order import Order, OrderItem                 # noqa
 from app.models.favorite import Favorite                      # noqa
 from app.models.affiliate import AffiliateClick, AffiliateWithdrawal  # noqa
 from app.models.audit import AuditLog                         # noqa
+from app.api.v1.endpoints.community import CommunityPost, CommunityComment, PostLike  # noqa
+from app.api.v1.endpoints.messages import Conversation, Message  # noqa
