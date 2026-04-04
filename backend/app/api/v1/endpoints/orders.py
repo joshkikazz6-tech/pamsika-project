@@ -14,9 +14,11 @@ from app.models.order import Order, OrderItem
 from app.models.cart import Cart, CartItem
 from app.models.product import Product
 from app.models.user import User
+from app.models.messages import Conversation, Message
 from app.schemas.common import OrderCreate, OrderOut
 from app.api.deps import get_current_user
 from app.services.audit import log_action
+from app.core.encryption import encrypt_data
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
@@ -233,6 +235,58 @@ async def create_direct_order(
     # INTEGRITY GUARD: ensure items were persisted
     if not saved.items:
         raise HTTPException(status_code=500, detail="Order creation failed: no items persisted")
+
+    # ── Auto-DM admin: create a system conversation for every direct order ──
+    try:
+        order_ref = contact_info.get("reference", str(saved.id)[:8].upper())
+        customer_name = contact_info.get("name", "Guest")
+        customer_phone = contact_info.get("phone", "")
+        channel_label = {"whatsapp": "WhatsApp", "messenger": "Facebook Messenger", "email": "Email"}.get(
+            payment_method, payment_method.title()
+        )
+        item_lines = "\n".join(
+            f"  • {i.product_snapshot.get('name', 'Item')} x{i.quantity} — MWK {i.unit_price:,.0f}"
+            for i in saved.items
+        )
+        auto_msg = (
+            f"🛒 NEW ORDER via {channel_label}\n\n"
+            f"Order Ref: #{order_ref}\n"
+            f"Customer: {customer_name}"
+            + (f" | 📞 {customer_phone}" if customer_phone else "") + "\n\n"
+            f"Items:\n{item_lines}\n\n"
+            f"Total: MWK {saved.total_amount:,.0f}\n"
+            f"Status: {saved.status.upper()}"
+        )
+        # Find the admin user (first active admin)
+        admin_result = await db.execute(
+            select(User).where(User.is_admin == True, User.is_active == True, User.deleted_at.is_(None)).limit(1)
+        )
+        admin_user = admin_result.scalar_one_or_none()
+        if admin_user:
+            # If the customer is a registered user, link the conversation to them;
+            # otherwise use the admin as the conversation owner (admin-to-self note)
+            conv_user_id = current_user.id if current_user else admin_user.id
+            new_conv = Conversation(
+                user_id=conv_user_id,
+                order_id=saved.id,
+                subject=f"Order #{order_ref} via {channel_label}",
+            )
+            db.add(new_conv)
+            await db.flush()
+            db.add(Message(
+                conversation_id=new_conv.id,
+                sender_id=admin_user.id,
+                content_enc=encrypt_data(auto_msg),
+                is_admin=True,
+            ))
+            await db.flush()
+            # Fire email notification to admin
+            from app.api.v1.endpoints.messages import _notify_admin
+            from app.core.config import settings
+            await _notify_admin(f"Order #{order_ref} ({channel_label})", auto_msg, str(new_conv.id))
+    except Exception:
+        pass  # Never block the order response due to DM failure
+
     # Return plain dict so no Pydantic auth validation blocks guest responses
     return {
         "id":             str(saved.id),

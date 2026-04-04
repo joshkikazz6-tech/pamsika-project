@@ -19,7 +19,6 @@ class Conversation(Base):
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     messages: Mapped[list["Message"]] = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
     user: Mapped["User"] = relationship("User")
-    order: Mapped["Order"] = relationship("Order")
 
 
 class Message(Base):

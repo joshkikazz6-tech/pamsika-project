@@ -163,15 +163,10 @@ async def admin_start_conversation(payload: dict, db: AsyncSession = Depends(get
     if not target_user:
         raise HTTPException(status_code=404, detail="User not found")
 
-    existing = await db.execute(
-        select(Conversation).where(Conversation.user_id == user_id, Conversation.order_id.is_(None))
-        .order_by(Conversation.updated_at.desc())
-    )
-    conv = existing.scalars().first()
-    if not conv:
-        conv = Conversation(user_id=user_id, subject=subject)
-        db.add(conv)
-        await db.flush()
+    # Always create a fresh conversation so the user clearly sees the new message
+    conv = Conversation(user_id=user_id, subject=subject)
+    db.add(conv)
+    await db.flush()
 
     db.add(Message(conversation_id=conv.id, sender_id=admin.id,
                    content_enc=_enc(first_message), media_enc=_enc_media(media_urls), is_admin=True))

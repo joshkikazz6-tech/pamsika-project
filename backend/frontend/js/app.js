@@ -184,7 +184,17 @@ const Community = {
       el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);"><div style="font-size:2rem;margin-bottom:8px;">📢</div><div>No posts yet. Check back soon!</div></div>';
       return;
     }
+    // Save any in-progress comment text before re-rendering so polling doesn't wipe it
+    const savedDrafts = {};
+    el.querySelectorAll('input[id^="cmt-input-"]').forEach(inp => {
+      if (inp.value) savedDrafts[inp.id] = inp.value;
+    });
     el.innerHTML = this._posts.map(p => this._renderPost(p)).join('');
+    // Restore saved drafts after render
+    Object.entries(savedDrafts).forEach(([id, val]) => {
+      const inp = document.getElementById(id);
+      if (inp) { inp.value = val; inp.focus(); }
+    });
   },
 
   _renderPost(p) {
@@ -359,7 +369,7 @@ const Messages = {
     // Header with "New Message" button
     const newBtn = Auth.user?.is_admin
       ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap;">✏️ New</button>`
-      : `<button onclick="Messages.showUserCompose()" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap;">✏️ New</button>`;
+      : `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:6px 12px;font-size:.75rem;cursor:pointer;font-weight:600;white-space:nowrap;">✏️ New Message</button>`;
 
     const header = `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card-2);">
       <span style="font-size:.75rem;font-weight:600;color:var(--text-2);">Conversations</span>
@@ -367,7 +377,11 @@ const Messages = {
     </div>`;
 
     if (!this._convs.length) {
-      el.innerHTML = header + '<div style="text-align:center;padding:30px 16px;color:var(--text-3);font-size:.8rem;"><div style="font-size:1.8rem;margin-bottom:8px;">💬</div>No conversations yet.<br>Tap ✏️ New to start one.</div>';
+      el.innerHTML = header + `<div style="text-align:center;padding:30px 16px;color:var(--text-3);font-size:.8rem;">
+        <div style="font-size:1.8rem;margin-bottom:8px;">💬</div>
+        <div style="margin-bottom:12px;">No conversations yet.</div>
+        ${Auth.user && !Auth.user.is_admin ? `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:8px 18px;font-size:.8rem;cursor:pointer;font-weight:600;">✏️ Message Pa_mSikA</button>` : ''}
+      </div>`;
       return;
     }
 
