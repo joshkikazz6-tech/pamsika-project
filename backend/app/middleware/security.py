@@ -19,10 +19,12 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
         # Set this header at the reverse-proxy (nginx/CDN) level for HTTPS only.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self' 'unsafe-inline'; "
-            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
-            "font-src 'self' https://fonts.gstatic.com; "
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https:; "
+            "font-src 'self' https://fonts.gstatic.com https: data:; "
             "img-src 'self' data: https: blob:; "
-            "connect-src 'self' https://pamsika-project.onrender.com https://pamsika.onrender.com https://pamsika.mw https://www.pamsika.mw http://localhost http://127.0.0.1;"
+            "connect-src 'self' https: wss: http://localhost http://127.0.0.1; "
+            "worker-src 'self' blob:; "
+            "manifest-src 'self';"
         )
         return response

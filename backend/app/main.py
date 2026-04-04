@@ -181,10 +181,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-if settings.ENVIRONMENT == "production":
+# Always allow the Render internal hostname and localhost regardless of config
+_trusted_hosts = list(settings.ALLOWED_HOSTS) + ["localhost", "127.0.0.1", "*.onrender.com"]
+if settings.ENVIRONMENT == "production" and "*" not in _trusted_hosts:
     app.add_middleware(
         TrustedHostMiddleware,
-        allowed_hosts=settings.ALLOWED_HOSTS,
+        allowed_hosts=_trusted_hosts,
     )
 
 app.include_router(api_router, prefix="/api")
