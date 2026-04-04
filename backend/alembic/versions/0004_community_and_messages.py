@@ -1,4 +1,4 @@
-"""Add community posts, comments, likes, conversations and messages tables
+"""Recreate community and messages tables with correct schema
 
 Revision ID: 0004_community_and_messages
 Revises: 0003_orders_commissions_paid
@@ -7,7 +7,6 @@ Create Date: 2026-04-03 00:00:00.000000
 
 from alembic import op
 import sqlalchemy as sa
-from sqlalchemy.dialects.postgresql import UUID
 
 revision = "0004_community_and_messages"
 down_revision = "0003_orders_commissions_paid"
@@ -18,9 +17,16 @@ depends_on = None
 def upgrade() -> None:
     conn = op.get_bind()
 
+    # Drop old tables if they exist (in dependency order)
+    conn.execute(sa.text("DROP TABLE IF EXISTS dm_messages CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS conversations CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS post_likes CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS community_comments CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS community_posts CASCADE"))
+
     # community_posts
     conn.execute(sa.text("""
-        CREATE TABLE IF NOT EXISTS community_posts (
+        CREATE TABLE community_posts (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             content     TEXT NOT NULL,
             images      JSON NOT NULL DEFAULT '[]',
@@ -32,7 +38,7 @@ def upgrade() -> None:
 
     # community_comments
     conn.execute(sa.text("""
-        CREATE TABLE IF NOT EXISTS community_comments (
+        CREATE TABLE community_comments (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             post_id     UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
             user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -44,7 +50,7 @@ def upgrade() -> None:
 
     # post_likes
     conn.execute(sa.text("""
-        CREATE TABLE IF NOT EXISTS post_likes (
+        CREATE TABLE post_likes (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             post_id     UUID NOT NULL REFERENCES community_posts(id) ON DELETE CASCADE,
             user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -54,7 +60,7 @@ def upgrade() -> None:
 
     # conversations
     conn.execute(sa.text("""
-        CREATE TABLE IF NOT EXISTS conversations (
+        CREATE TABLE conversations (
             id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             user_id     UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
             order_id    UUID REFERENCES orders(id) ON DELETE SET NULL,
@@ -63,11 +69,11 @@ def upgrade() -> None:
             updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """))
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_conversations_user_id ON conversations(user_id)"))
+    conn.execute(sa.text("CREATE INDEX ix_conversations_user_id ON conversations(user_id)"))
 
-    # dm_messages
+    # dm_messages with correct encrypted column names
     conn.execute(sa.text("""
-        CREATE TABLE IF NOT EXISTS dm_messages (
+        CREATE TABLE dm_messages (
             id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
             conversation_id   UUID NOT NULL REFERENCES conversations(id) ON DELETE CASCADE,
             sender_id         UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
@@ -78,13 +84,13 @@ def upgrade() -> None:
             created_at        TIMESTAMPTZ NOT NULL DEFAULT now()
         )
     """))
-    conn.execute(sa.text("CREATE INDEX IF NOT EXISTS ix_dm_messages_conv_id ON dm_messages(conversation_id)"))
+    conn.execute(sa.text("CREATE INDEX ix_dm_messages_conv_id ON dm_messages(conversation_id)"))
 
 
 def downgrade() -> None:
     conn = op.get_bind()
-    conn.execute(sa.text("DROP TABLE IF EXISTS dm_messages"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS conversations"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS post_likes"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS community_comments"))
-    conn.execute(sa.text("DROP TABLE IF EXISTS community_posts"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS dm_messages CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS conversations CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS post_likes CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS community_comments CASCADE"))
+    conn.execute(sa.text("DROP TABLE IF EXISTS community_posts CASCADE"))
