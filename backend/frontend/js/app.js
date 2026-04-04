@@ -153,6 +153,287 @@ function getDeliveryInfo(location) {
   return DELIVERY_ZONES[location] || { days: '3-7', fee: 5000 };
 }
 
+
+/* ═══════════════════════════════════════════════════════════
+   COMMUNITY FEED
+   ═══════════════════════════════════════════════════════════ */
+const Community = {
+  _posts: [],
+  _interval: null,
+
+  async load() {
+    try {
+      this._posts = await Api.getPosts();
+      this.render();
+    } catch(e) { console.error('Community load error', e); }
+  },
+
+  startPolling() {
+    this.stopPolling();
+    this._interval = setInterval(() => this.load(), 10000);
+  },
+
+  stopPolling() {
+    if (this._interval) { clearInterval(this._interval); this._interval = null; }
+  },
+
+  render() {
+    const el = document.getElementById('community-feed');
+    if (!el) return;
+    if (!this._posts.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);"><div style="font-size:2rem;margin-bottom:8px;">📢</div><div>No posts yet. Check back soon!</div></div>';
+      return;
+    }
+    el.innerHTML = this._posts.map(p => this._renderPost(p)).join('');
+  },
+
+  _renderPost(p) {
+    const liked = Auth.user && p.liked_by_ids.includes(String(Auth.user.id));
+    const imgs = (p.images || []).map(img => `<img src="${imgProxy(img)}" style="width:100%;max-height:400px;object-fit:cover;border-radius:var(--radius-sm);margin-bottom:6px;" onerror="this.style.display='none'">`).join('');
+    const comments = (p.comments || []).map(c => `
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;" id="cmt-${c.id}">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;color:var(--gold);">${c.author[0]?.toUpperCase()}</div>
+        <div style="flex:1;background:var(--bg-card-2);border-radius:var(--radius-sm);padding:8px 10px;">
+          <div style="font-size:.7rem;font-weight:600;color:var(--gold);margin-bottom:2px;">${U.esc(c.author)}</div>
+          <div style="font-size:.78rem;">${U.esc(c.content)}</div>
+        </div>
+        ${Auth.user && (String(Auth.user.id) === String(c.user_id) || Auth.user.is_admin) ? `<button onclick="Community._deleteComment('${c.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:.7rem;padding:4px;">✕</button>` : ''}
+      </div>`).join('');
+
+    return `<div class="community-post" id="post-${p.id}">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <div style="display:flex;align-items:center;gap:8px;">
+          <div style="width:36px;height:36px;border-radius:50%;background:var(--gold);display:flex;align-items:center;justify-content:center;font-size:.85rem;font-weight:700;color:#000;">P</div>
+          <div>
+            <div style="font-size:.8rem;font-weight:600;color:var(--gold);">Pa_mSikA</div>
+            <div style="font-size:.66rem;color:var(--text-3);">${new Date(p.created_at).toLocaleDateString('en-GB', {day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})}</div>
+          </div>
+        </div>
+        ${Auth.user?.is_admin ? `<button onclick="Community._deletePost('${p.id}')" style="background:none;border:none;color:var(--text-3);cursor:pointer;font-size:.75rem;">🗑 Delete</button>` : ''}
+      </div>
+      ${p.content ? `<p style="font-size:.88rem;line-height:1.6;margin-bottom:10px;">${U.esc(p.content)}</p>` : ''}
+      ${imgs}
+      <div style="display:flex;align-items:center;gap:16px;margin:12px 0;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);">
+        <button onclick="Community._toggleLike('${p.id}')" style="background:none;border:none;cursor:pointer;display:flex;align-items:center;gap:5px;font-size:.82rem;color:${liked ? 'var(--red)' : 'var(--text-3)'};" id="like-btn-${p.id}">
+          ${liked ? '❤️' : '🤍'} <span id="like-count-${p.id}">${p.likes}</span>
+        </button>
+        <button onclick="Community._focusComment('${p.id}')" style="background:none;border:none;cursor:pointer;font-size:.82rem;color:var(--text-3);">
+          💬 ${p.comments.length} comment${p.comments.length !== 1 ? 's' : ''}
+        </button>
+      </div>
+      <div id="comments-${p.id}" style="margin-bottom:10px;">${comments}</div>
+      ${Auth.user ? `<div style="display:flex;gap:8px;align-items:center;">
+        <div style="width:28px;height:28px;border-radius:50%;background:var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.7rem;color:var(--gold);flex-shrink:0;">${Auth.user.full_name?.[0]?.toUpperCase() || '?'}</div>
+        <input id="cmt-input-${p.id}" placeholder="Write a comment…" style="flex:1;font-size:.78rem;" onkeydown="if(event.key==='Enter')Community._submitComment('${p.id}')">
+        <button class="aff-copy-btn" onclick="Community._submitComment('${p.id}')">Post</button>
+      </div>` : `<div style="font-size:.76rem;color:var(--text-3);">
+        <span onclick="UI.openAuth('login')" style="color:var(--gold);cursor:pointer;">Sign in</span> to comment
+      </div>`}
+    </div>`;
+  },
+
+  async _toggleLike(postId) {
+    if (!Auth.user) return UI.openAuth('login');
+    try {
+      const res = await Api.likePost(postId);
+      const btn = document.getElementById('like-btn-' + postId);
+      const cnt = document.getElementById('like-count-' + postId);
+      if (btn) btn.style.color = res.liked ? 'var(--red)' : 'var(--text-3)';
+      if (btn) btn.childNodes[0].textContent = res.liked ? '❤️ ' : '🤍 ';
+      if (cnt) cnt.textContent = res.likes;
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  _focusComment(postId) {
+    const inp = document.getElementById('cmt-input-' + postId);
+    if (inp) inp.focus();
+  },
+
+  async _submitComment(postId) {
+    if (!Auth.user) return UI.openAuth('login');
+    const inp = document.getElementById('cmt-input-' + postId);
+    const content = inp?.value.trim();
+    if (!content) return;
+    try {
+      const c = await Api.addComment(postId, content);
+      inp.value = '';
+      const container = document.getElementById('comments-' + postId);
+      if (container) container.insertAdjacentHTML('beforeend', `
+        <div style="display:flex;gap:8px;margin-bottom:8px;align-items:flex-start;" id="cmt-${c.id}">
+          <div style="width:28px;height:28px;border-radius:50%;background:var(--gold-dim);display:flex;align-items:center;justify-content:center;font-size:.7rem;flex-shrink:0;color:var(--gold);">${c.author[0]?.toUpperCase()}</div>
+          <div style="flex:1;background:var(--bg-card-2);border-radius:var(--radius-sm);padding:8px 10px;">
+            <div style="font-size:.7rem;font-weight:600;color:var(--gold);margin-bottom:2px;">${U.esc(c.author)}</div>
+            <div style="font-size:.78rem;">${U.esc(c.content)}</div>
+          </div>
+        </div>`);
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async _deleteComment(commentId) {
+    try {
+      await Api.deleteComment(commentId);
+      document.getElementById('cmt-' + commentId)?.remove();
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async _deletePost(postId) {
+    if (!await Confirm.show('This post will be permanently deleted.', { title: 'Delete post?', icon: '🗑️', iconColor: 'var(--red)', okText: 'Delete', okColor: 'var(--red)', okBorder: 'var(--red)' })) return;
+    try {
+      await Api.deletePost(postId);
+      document.getElementById('post-' + postId)?.remove();
+      Toast.show('Deleted', '', 'info', '🗑');
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async adminCreatePost() {
+    const content = document.getElementById('new-post-content')?.value.trim() || '';
+    const imgInput = document.getElementById('new-post-imgs');
+    let images = [];
+    if (imgInput?.files?.length) {
+      Toast.show('Uploading images…', '', 'info', '⏳');
+      images = await Admin._uploadFiles(imgInput.files);
+    }
+    if (!content && !images.length) return Toast.show('Error', 'Add text or images', 'error', '⚠️');
+    try {
+      await Api.createPost(content, images);
+      document.getElementById('new-post-content').value = '';
+      if (imgInput) imgInput.value = '';
+      document.getElementById('new-post-preview')?.replaceChildren();
+      Toast.show('Posted! 📢', 'All users will be notified', 'success', '✅');
+      await Community.load();
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+};
+
+/* ═══════════════════════════════════════════════════════════
+   MESSAGES / DM SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+const Messages = {
+  _convs: [],
+  _activeConv: null,
+  _interval: null,
+  _unreadInterval: null,
+
+  async load() {
+    try {
+      this._convs = Auth.user?.is_admin ? await Api.adminAllConversations() : await Api.myConversations();
+      this.renderList();
+    } catch(e) { console.error('Messages load error', e); }
+  },
+
+  startPolling() {
+    this.stopPolling();
+    this._interval = setInterval(() => {
+      if (this._activeConv) this.openConversation(this._activeConv, true);
+      else this.load();
+    }, 8000);
+    // Poll unread count for nav badge
+    this._unreadBadge();
+    this._unreadInterval = setInterval(() => this._unreadBadge(), 15000);
+  },
+
+  stopPolling() {
+    if (this._interval) { clearInterval(this._interval); this._interval = null; }
+    if (this._unreadInterval) { clearInterval(this._unreadInterval); this._unreadInterval = null; }
+  },
+
+  async _unreadBadge() {
+    if (!Auth.user?.is_admin) return;
+    try {
+      const data = await Api.adminUnreadCount();
+      ['msg-badge', 'msg-badge-b'].forEach(id => {
+        const badge = document.getElementById(id);
+        if (badge) { badge.textContent = data.count; badge.style.display = data.count > 0 ? 'flex' : 'none'; }
+      });
+    } catch {}
+  },
+
+  renderList() {
+    const el = document.getElementById('messages-list');
+    if (!el) return;
+    if (!this._convs.length) {
+      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);"><div style="font-size:2rem;margin-bottom:8px;">💬</div><div>No messages yet</div></div>';
+      return;
+    }
+    el.innerHTML = this._convs.map(c => `
+      <div onclick="Messages.openConversation('${c.id}')" style="padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;${this._activeConv === c.id ? 'background:var(--gold-dim);' : ''}" onmouseover="this.style.background='var(--bg-card-2)'" onmouseout="this.style.background='${this._activeConv === c.id ? 'var(--gold-dim)' : ''}'">
+        <div style="display:flex;justify-content:space-between;align-items:center;">
+          <div style="font-size:.8rem;font-weight:600;">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}</div>
+          ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;">${c.unread}</span>` : ''}
+        </div>
+        <div style="font-size:.72rem;color:var(--text-3);margin-top:2px;">${U.esc(c.subject)}${c.order_ref ? ` · Order #${c.order_ref}` : ''}</div>
+        <div style="font-size:.68rem;color:var(--text-3);margin-top:2px;">${new Date(c.updated_at).toLocaleDateString()}</div>
+      </div>`).join('');
+  },
+
+  async openConversation(convId, silent = false) {
+    this._activeConv = convId;
+    try {
+      const conv = await Api.getConversation(convId);
+      const el = document.getElementById('messages-thread');
+      if (!el) return;
+      if (!silent) this.renderList();
+      el.innerHTML = `
+        <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg-card-2);">
+          <div style="font-size:.85rem;font-weight:600;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
+          ${Auth.user?.is_admin ? `<div style="font-size:.72rem;color:var(--text-3);">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : ''}
+        </div>
+        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
+          ${conv.messages.map(m => `
+            <div style="display:flex;${m.is_admin ? 'justify-content:flex-start' : 'justify-content:flex-end'};">
+              <div style="max-width:75%;background:${m.is_admin ? 'var(--bg-card-2)' : 'var(--gold-dim)'};border:1px solid ${m.is_admin ? 'var(--border)' : 'var(--gold)'};border-radius:var(--radius-sm);padding:10px 14px;">
+                <div style="font-size:.68rem;color:var(--text-3);margin-bottom:4px;">${U.esc(m.sender)} · ${new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
+                <div style="font-size:.82rem;line-height:1.5;">${U.esc(m.content)}</div>
+              </div>
+            </div>`).join('')}
+        </div>
+        <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;">
+          <input id="msg-reply-input" placeholder="Type a message…" style="flex:1;font-size:.82rem;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Messages.sendReply('${conv.id}')}">
+          <button class="btn btn-gold btn-sm" onclick="Messages.sendReply('${conv.id}')">Send</button>
+        </div>`;
+      // Scroll to bottom
+      const body = document.getElementById('msg-thread-body');
+      if (body) body.scrollTop = body.scrollHeight;
+    } catch(e) { if (!silent) Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async sendReply(convId) {
+    const inp = document.getElementById('msg-reply-input');
+    const content = inp?.value.trim();
+    if (!content) return;
+    inp.value = '';
+    try {
+      await Api.replyMessage(convId, content);
+      await this.openConversation(convId, true);
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async startFromOrder(orderId, orderRef) {
+    if (!Auth.user) return UI.openAuth('login');
+    Views.show('messages');
+    const subject = `Order #${orderRef} Enquiry`;
+    // Show compose form
+    const thread = document.getElementById('messages-thread');
+    if (thread) thread.innerHTML = `
+      <div style="padding:20px;">
+        <div style="font-family:var(--font-display);font-size:1rem;margin-bottom:14px;">💬 Message about Order #${orderRef}</div>
+        <textarea id="new-msg-content" placeholder="Describe your issue or question…" style="width:100%;height:100px;font-size:.82rem;box-sizing:border-box;margin-bottom:10px;resize:vertical;"></textarea>
+        <button class="btn btn-gold btn-sm" onclick="Messages._sendFirst('${orderId}','${subject}')">Send Message</button>
+      </div>`;
+  },
+
+  async _sendFirst(orderId, subject) {
+    const content = document.getElementById('new-msg-content')?.value.trim();
+    if (!content) return Toast.show('Error', 'Write a message first', 'error', '⚠️');
+    try {
+      const res = await Api.startConversation(orderId, subject, content);
+      Toast.show('Message sent! 💬', 'Admin will reply soon', 'success', '✅');
+      await this.load();
+      await this.openConversation(res.conversation_id);
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+};
+
 /* ── CONFIRM DIALOG ───────────────────────────────────────── */
 const Confirm = {
   show(message, opts = {}) {
@@ -1098,8 +1379,11 @@ const Views = {
   current: 'home',
 
   show(v) {
+    // Stop polling when leaving community/messages
+    if (this.current === 'community' && v !== 'community') Community.stopPolling();
+    if (this.current === 'messages' && v !== 'messages') Messages.stopPolling();
     this.current = v;
-    ['home', 'favorites', 'affiliate', 'account'].forEach(x => {
+    ['home', 'favorites', 'affiliate', 'account', 'community', 'messages'].forEach(x => {
       const el = document.getElementById('view-' + x);
       if (el) el.style.display = x === v ? 'block' : 'none';
     });
@@ -1113,6 +1397,12 @@ const Views = {
     if (v === 'favorites') this.renderFavs();
     if (v === 'affiliate') this.renderAffiliate();
     if (v === 'account') this.renderAccount();
+    if (v === 'community') {
+      Community.load(); Community.startPolling();
+      const composer = document.getElementById('admin-post-composer');
+      if (composer) composer.style.display = Auth.user?.is_admin ? 'block' : 'none';
+    }
+    if (v === 'messages') { Messages.load(); Messages.startPolling(); }
   },
 
   async renderFavs() {
@@ -1372,7 +1662,10 @@ const Views = {
             <div style="text-align:right;flex-shrink:0;">
               <div style="color:var(--gold);font-size:.88rem;font-weight:600;">${U.fmt(o.total_amount)}</div>
               <span class="order-status status-${o.status || 'pending'}">${o.status || 'Pending'}</span>
-              <button onclick="Views._deleteOrder('${o.id}')" title="Remove from history" style="display:block;margin-top:4px;padding:2px 7px;border-radius:4px;border:1px solid var(--border-2);background:transparent;color:var(--red);font-size:.6rem;cursor:pointer;">🗑 Remove</button>
+              <div style="display:flex;gap:4px;margin-top:4px;">
+                <button onclick="Messages.startFromOrder('${o.id}','${String(o.id).substring(0,8).toUpperCase()}')" style="padding:2px 7px;border-radius:4px;border:1px solid var(--border-2);background:transparent;color:var(--teal);font-size:.6rem;cursor:pointer;">💬 Message</button>
+                <button onclick="Views._deleteOrder('${o.id}')" title="Remove from history" style="padding:2px 7px;border-radius:4px;border:1px solid var(--border-2);background:transparent;color:var(--red);font-size:.6rem;cursor:pointer;">🗑 Remove</button>
+              </div>
             </div>
           </div>`).join('') : '<p style="font-size:.8rem;color:var(--text-3);padding:14px 0;">No orders yet.</p>'}
         ${orders.length ? `<div style="margin-top:10px;text-align:right;"><button class="aff-copy-btn" style="color:var(--red);border-color:var(--red);font-size:.66rem;" onclick="Views._clearOrders()">🗑 Clear All Order History</button></div>` : ''}
@@ -1424,7 +1717,7 @@ const Admin = {
 
   _render() {
     const body = document.getElementById('admin-modal-body'); if (!body) return;
-    const tabs = [['overview', '📊 Overview'], ['orders', '📦 Orders'], ['products', '🛍 Products'], ['affiliates', '💼 Affiliates'], ['withdrawals', '💸 Withdrawals'], ['users', '👥 Users'], ['promo', '🎟 Promos'], ['notif', '🔔 Notify']];
+    const tabs = [['overview', '📊 Overview'], ['orders', '📦 Orders'], ['products', '🛍 Products'], ['affiliates', '💼 Affiliates'], ['withdrawals', '💸 Withdrawals'], ['users', '👥 Users'], ['promo', '🎟 Promos'], ['notif', '🔔 Notify'], ['inbox', '💬 Inbox']];
     body.innerHTML = `
       <div class="admin-wrap">
         <div class="admin-sidebar">
@@ -1456,6 +1749,7 @@ const Admin = {
         case 'users': c.innerHTML = await this._users(); break;
         case 'promo': c.innerHTML = await this._promos(); break;
         case 'notif': c.innerHTML = await this._notifPanel(); break;
+        case 'inbox': c.innerHTML = await this._inbox(); break;
       }
     } catch (e) {
       c.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + U.esc(e.message) + '</div>';
@@ -1732,6 +2026,26 @@ const Admin = {
       Toast.show('Error', e.message, 'error', '⚠️');
       if (btn) { btn.disabled = false; btn.textContent = '🔔 Send to All Users'; }
     }
+  },
+
+  async _inbox() {
+    const convs = await Api.adminAllConversations().catch(() => []);
+    const unread = convs.reduce((s,c) => s + c.unread, 0);
+    return `<div class="admin-head"><h2>💬 Customer Messages</h2><p>${convs.length} conversations · <span style="color:var(--gold);">${unread} unread</span></p></div>
+      <div style="display:grid;grid-template-columns:280px 1fr;gap:0;border:1px solid var(--border);border-radius:var(--radius);overflow:hidden;height:500px;">
+        <div style="border-right:1px solid var(--border);overflow-y:auto;background:var(--bg-card);">
+          ${convs.length ? convs.map(c => `<div onclick="Messages._activeConv='${c.id}';Messages.openConversation('${c.id}')" style="padding:12px 14px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;" onmouseover="this.style.background='var(--bg-card-2)'" onmouseout="this.style.background=''">
+            <div style="display:flex;justify-content:space-between;align-items:center;">
+              <div style="font-size:.78rem;font-weight:600;">${U.esc(c.user_name)}</div>
+              ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:50%;width:16px;height:16px;display:flex;align-items:center;justify-content:center;font-size:.6rem;font-weight:700;">${c.unread}</span>` : ''}
+            </div>
+            <div style="font-size:.68rem;color:var(--text-3);margin-top:2px;">${U.esc(c.subject)}${c.order_ref ? ` · #${c.order_ref}` : ''}</div>
+          </div>`).join('') : '<div style="padding:20px;font-size:.78rem;color:var(--text-3);">No messages yet</div>'}
+        </div>
+        <div id="messages-thread" style="display:flex;flex-direction:column;overflow:hidden;">
+          <div style="display:flex;align-items:center;justify-content:center;height:100%;color:var(--text-3);font-size:.82rem;">Select a conversation</div>
+        </div>
+      </div>`;
   },
 
   async _clearAllOrders() {

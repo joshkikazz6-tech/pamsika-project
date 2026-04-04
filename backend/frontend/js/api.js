@@ -205,6 +205,37 @@ const Api = {
   async adminWithdrawals() { return this.get('/admin/withdrawals'); },
   async adminUpdateWithdrawal(id, status) { return this.patch('/admin/withdrawals/' + id, { status }); },
   async adminAffiliates() { return this.get('/admin/affiliates'); },
+  // ── Community ─────────────────────────────────────────────
+  async getPosts() { return this.get('/community/posts'); },
+  async createPost(content, images) { return this.post('/community/posts', { content, images }); },
+  async deletePost(id) { return this.del('/community/posts/' + id); },
+  async likePost(id) { return this.post('/community/posts/' + id + '/like'); },
+  async addComment(postId, content) { return this.post('/community/posts/' + postId + '/comments', { content }); },
+  async deleteComment(id) { return this.del('/community/comments/' + id); },
+
+  // ── Messages ──────────────────────────────────────────────
+  async myConversations() { return this.get('/messages/my'); },
+  async startConversation(orderId, subject, message) { return this.post('/messages/start', { order_id: orderId, subject, message }); },
+  async getConversation(id) { return this.get('/messages/' + id); },
+  async replyMessage(convId, content) { return this.post('/messages/' + convId + '/reply', { content }); },
+  async adminAllConversations() { return this.get('/messages/admin/all'); },
+  async adminUnreadCount() { return this.get('/messages/admin/unread-count'); },
+
+  // ── Community ─────────────────────────────────────────────
+  async getCommunityPosts() { return this.get('/community/posts'); },
+  async createCommunityPost(content, images) { return this.post('/community/posts', { content, images }); },
+  async deleteCommunityPost(id) { return this.del('/community/posts/' + id); },
+  async likePost(id) { return this.post('/community/posts/' + id + '/like'); },
+  async addComment(postId, content) { return this.post('/community/posts/' + postId + '/comments', { content }); },
+  async deleteComment(id) { return this.del('/community/comments/' + id); },
+
+  // ── Messages ──────────────────────────────────────────────
+  async sendMessage(orderId, content) { return this.post('/messages/order/' + orderId, { content }); },
+  async adminReply(orderId, content) { return this.post('/messages/reply/' + orderId, { content }); },
+  async getOrderMessages(orderId) { return this.get('/messages/order/' + orderId); },
+  async adminConversations() { return this.get('/messages/admin/conversations'); },
+  async unreadCount() { return this.get('/messages/unread'); },
+
   // ── Reviews ───────────────────────────────────────────────
   async getReviews(productId) { return this.get('/reviews/' + productId); },
   async addReview(productId, rating, comment) { return this.post('/reviews/' + productId, { rating, comment }); },

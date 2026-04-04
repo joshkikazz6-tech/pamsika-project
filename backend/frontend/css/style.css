@@ -806,3 +806,20 @@ body.light .glass { background: rgba(240,235,226,.92); }
 @media (min-width: 769px) {
   #bottom-nav { display: none !important; }
 }
+
+/* ── COMMUNITY POSTS ────────────────────────────────────────── */
+.community-post {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 18px;
+  margin-bottom: 16px;
+  transition: var(--trans);
+}
+.community-post:hover { border-color: var(--border-2); }
+
+/* ── MESSAGES RESPONSIVE ────────────────────────────────────── */
+@media (max-width: 600px) {
+  #view-messages > div > div { grid-template-columns: 1fr !important; }
+  #messages-list { border-right: none !important; border-bottom: 1px solid var(--border); max-height: 200px; }
+}
