@@ -224,21 +224,6 @@ const Api = {
   async adminSearchUsers(q) { return this.get('/messages/admin/search-users?q=' + encodeURIComponent(q)); },
   async adminStartConversation(userId, subject, message, mediaUrls) { return this.post('/messages/admin/start', { user_id: userId, subject, message, media_urls: mediaUrls || [] }); },
 
-  // ── Community ─────────────────────────────────────────────
-  async getCommunityPosts() { return this.get('/community/posts'); },
-  async createCommunityPost(content, images) { return this.post('/community/posts', { content, images }); },
-  async deleteCommunityPost(id) { return this.del('/community/posts/' + id); },
-  async likePost(id) { return this.post('/community/posts/' + id + '/like'); },
-  async addComment(postId, content) { return this.post('/community/posts/' + postId + '/comments', { content }); },
-  async deleteComment(id) { return this.del('/community/comments/' + id); },
-
-  // ── Messages ──────────────────────────────────────────────
-  async sendMessage(orderId, content) { return this.post('/messages/order/' + orderId, { content }); },
-  async adminReply(orderId, content) { return this.post('/messages/reply/' + orderId, { content }); },
-  async getOrderMessages(orderId) { return this.get('/messages/order/' + orderId); },
-  async adminConversations() { return this.get('/messages/admin/conversations'); },
-  async unreadCount() { return this.get('/messages/unread'); },
-
   // ── Reviews ───────────────────────────────────────────────
   async getReviews(productId) { return this.get('/reviews/' + productId); },
   async addReview(productId, rating, comment) { return this.post('/reviews/' + productId, { rating, comment }); },
