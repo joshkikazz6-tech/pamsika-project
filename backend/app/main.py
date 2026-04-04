@@ -40,11 +40,7 @@ logging.getLogger("uvicorn.access").addFilter(_SuppressHealthCheck())
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        try:
-            await conn.run_sync(Base.metadata.create_all, checkfirst=True)
-        except Exception:
-            pass
+    # Tables are created/migrated by: alembic upgrade head (runs in Dockerfile CMD)
     yield
     await engine.dispose()
 

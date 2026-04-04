@@ -18,7 +18,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy backend application
 COPY . .
 
-# ✅ FIXED: Copy frontend from inside backend
+# Copy frontend from inside backend
 COPY frontend ./frontend
 
 # Create uploads directory and set full ownership to appuser BEFORE switching user
@@ -31,4 +31,5 @@ EXPOSE 8000
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
     CMD curl -f http://localhost:8000/health || exit 1
 
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Run migrations then start server
+CMD alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 1
