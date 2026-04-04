@@ -313,10 +313,13 @@ const Messages = {
   _activeConv: null,
   _interval: null,
   _unreadInterval: null,
+  _replyMedia: [],   // staged media URLs for the reply bar
 
   async load() {
     try {
-      this._convs = Auth.user?.is_admin ? await Api.adminAllConversations() : await Api.myConversations();
+      this._convs = Auth.user?.is_admin
+        ? await Api.adminAllConversations()
+        : await Api.myConversations();
       this.renderList();
     } catch(e) { console.error('Messages load error', e); }
   },
@@ -327,7 +330,6 @@ const Messages = {
       if (this._activeConv) this.openConversation(this._activeConv, true);
       else this.load();
     }, 8000);
-    // Poll unread count for nav badge
     this._unreadBadge();
     this._unreadInterval = setInterval(() => this._unreadBadge(), 15000);
   },
@@ -341,96 +343,397 @@ const Messages = {
     if (!Auth.user?.is_admin) return;
     try {
       const data = await Api.adminUnreadCount();
-      ['msg-badge', 'msg-badge-b'].forEach(id => {
+      ['msg-badge', 'msg-badge-b', 'msg-badge-h'].forEach(id => {
         const badge = document.getElementById(id);
         if (badge) { badge.textContent = data.count; badge.style.display = data.count > 0 ? 'flex' : 'none'; }
       });
     } catch {}
   },
 
+  // ── Render sidebar list ──────────────────────────────────────────────────
+
   renderList() {
     const el = document.getElementById('messages-list');
     if (!el) return;
+
+    // Header with "New Message" button
+    const newBtn = Auth.user?.is_admin
+      ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap;">✏️ New</button>`
+      : `<button onclick="Messages.showUserCompose()" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap;">✏️ New</button>`;
+
+    const header = `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card-2);">
+      <span style="font-size:.75rem;font-weight:600;color:var(--text-2);">Conversations</span>
+      ${Auth.user ? newBtn : ''}
+    </div>`;
+
     if (!this._convs.length) {
-      el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);"><div style="font-size:2rem;margin-bottom:8px;">💬</div><div>No messages yet</div></div>';
+      el.innerHTML = header + '<div style="text-align:center;padding:30px 16px;color:var(--text-3);font-size:.8rem;"><div style="font-size:1.8rem;margin-bottom:8px;">💬</div>No conversations yet.<br>Tap ✏️ New to start one.</div>';
       return;
     }
-    el.innerHTML = this._convs.map(c => `
-      <div onclick="Messages.openConversation('${c.id}')" style="padding:14px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .15s;${this._activeConv === c.id ? 'background:var(--gold-dim);' : ''}" onmouseover="this.style.background='var(--bg-card-2)'" onmouseout="this.style.background='${this._activeConv === c.id ? 'var(--gold-dim)' : ''}'">
+
+    const rows = this._convs.map(c => `
+      <div onclick="Messages.openConversation('${c.id}')"
+           style="padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;background:${this._activeConv === c.id ? 'var(--gold-dim)' : ''};"
+           onmouseover="this.style.background='var(--bg-card-2)'"
+           onmouseout="this.style.background='${this._activeConv === c.id ? 'var(--gold-dim)' : ''}'">
         <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-size:.8rem;font-weight:600;">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}</div>
-          ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.65rem;font-weight:700;">${c.unread}</span>` : ''}
+          <div style="font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}</div>
+          ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:700;padding:0 3px;">${c.unread}</span>` : ''}
         </div>
-        <div style="font-size:.72rem;color:var(--text-3);margin-top:2px;">${U.esc(c.subject)}${c.order_ref ? ` · Order #${c.order_ref}` : ''}</div>
-        <div style="font-size:.68rem;color:var(--text-3);margin-top:2px;">${new Date(c.updated_at).toLocaleDateString()}</div>
+        <div style="font-size:.7rem;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(c.subject)}${c.order_ref ? ` · #${c.order_ref}` : ''}</div>
+        <div style="font-size:.65rem;color:var(--text-3);margin-top:2px;">${new Date(c.updated_at).toLocaleDateString()}</div>
       </div>`).join('');
+
+    el.innerHTML = header + rows;
   },
+
+  // ── Open a conversation thread ───────────────────────────────────────────
 
   async openConversation(convId, silent = false) {
     this._activeConv = convId;
+    this._replyMedia = [];
     try {
       const conv = await Api.getConversation(convId);
       const el = document.getElementById('messages-thread');
       if (!el) return;
       if (!silent) this.renderList();
+
+      const msgBubbles = conv.messages.map(m => {
+        const isAdmin = m.is_admin;
+        const mediaHtml = (m.media_urls || []).map(url =>
+          `<img src="${U.esc(url)}" alt="attachment" style="max-width:100%;max-height:220px;border-radius:6px;margin-top:6px;display:block;cursor:pointer;" onclick="window.open('${U.esc(url)}','_blank')" onerror="this.style.display='none'">`
+        ).join('');
+        return `
+          <div style="display:flex;${isAdmin ? 'justify-content:flex-start' : 'justify-content:flex-end'};">
+            <div style="max-width:75%;background:${isAdmin ? 'var(--bg-card-2)' : 'var(--gold-dim)'};border:1px solid ${isAdmin ? 'var(--border)' : 'var(--gold)'};border-radius:var(--radius-sm);padding:10px 14px;">
+              <div style="font-size:.66rem;color:var(--text-3);margin-bottom:4px;">${U.esc(m.sender)} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
+              ${m.content ? `<div style="font-size:.82rem;line-height:1.55;word-break:break-word;">${U.esc(m.content)}</div>` : ''}
+              ${mediaHtml}
+            </div>
+          </div>`;
+      }).join('');
+
       el.innerHTML = `
-        <div style="padding:14px 16px;border-bottom:1px solid var(--border);background:var(--bg-card-2);">
-          <div style="font-size:.85rem;font-weight:600;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
-          ${Auth.user?.is_admin ? `<div style="font-size:.72rem;color:var(--text-3);">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : ''}
+        <div style="padding:13px 16px;border-bottom:1px solid var(--border);background:var(--bg-card-2);display:flex;align-items:center;gap:10px;">
+          <div style="flex:1;min-width:0;">
+            <div style="font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
+            ${Auth.user?.is_admin ? `<div style="font-size:.7rem;color:var(--text-3);">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : ''}
+          </div>
+          <div style="font-size:.65rem;color:var(--text-3);">🔒 E2E encrypted</div>
         </div>
         <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
-          ${conv.messages.map(m => `
-            <div style="display:flex;${m.is_admin ? 'justify-content:flex-start' : 'justify-content:flex-end'};">
-              <div style="max-width:75%;background:${m.is_admin ? 'var(--bg-card-2)' : 'var(--gold-dim)'};border:1px solid ${m.is_admin ? 'var(--border)' : 'var(--gold)'};border-radius:var(--radius-sm);padding:10px 14px;">
-                <div style="font-size:.68rem;color:var(--text-3);margin-bottom:4px;">${U.esc(m.sender)} · ${new Date(m.created_at).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>
-                <div style="font-size:.82rem;line-height:1.5;">${U.esc(m.content)}</div>
-              </div>
-            </div>`).join('')}
+          ${msgBubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:30px;">No messages yet</div>'}
         </div>
-        <div style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:8px;">
-          <input id="msg-reply-input" placeholder="Type a message…" style="flex:1;font-size:.82rem;" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Messages.sendReply('${conv.id}')}">
-          <button class="btn btn-gold btn-sm" onclick="Messages.sendReply('${conv.id}')">Send</button>
+        <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+          <div id="msg-media-preview" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <label title="Attach image" style="cursor:pointer;color:var(--text-3);font-size:1.1rem;flex-shrink:0;">
+              📎<input type="file" accept="image/*,image/gif" multiple style="display:none;" onchange="Messages._stageMedia(this,'${conv.id}')">
+            </label>
+            <textarea id="msg-reply-input" placeholder="Type a message… (Enter to send)" rows="1"
+              style="flex:1;font-size:.82rem;resize:none;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-card);color:var(--text-1);font-family:inherit;line-height:1.4;"
+              onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Messages.sendReply('${conv.id}')}"
+              oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
+            <button class="btn btn-gold btn-sm" onclick="Messages.sendReply('${conv.id}')" style="flex-shrink:0;">Send</button>
+          </div>
         </div>`;
-      // Scroll to bottom
+
       const body = document.getElementById('msg-thread-body');
       if (body) body.scrollTop = body.scrollHeight;
     } catch(e) { if (!silent) Toast.show('Error', e.message, 'error', '⚠️'); }
   },
 
+  // ── Stage media files for a reply ───────────────────────────────────────
+
+  async _stageMedia(input, convId) {
+    const files = Array.from(input.files || []);
+    if (!files.length) return;
+    const preview = document.getElementById('msg-media-preview');
+    Toast.show('Uploading…', '', 'info', '⏳');
+    try {
+      // Use the existing upload endpoint
+      const formData = new FormData();
+      files.forEach(f => formData.append('files', f));
+      const token = Api._token;
+      const res = await fetch(API_BASE + '/admin/upload/images', {
+        method: 'POST',
+        headers: token ? { Authorization: 'Bearer ' + token } : {},
+        body: formData,
+      });
+      if (!res.ok) throw new Error('Upload failed');
+      const data = await res.json();
+      this._replyMedia.push(...(data.urls || []));
+      // Show thumbs
+      if (preview) {
+        preview.innerHTML = this._replyMedia.map((url, i) =>
+          `<div style="position:relative;display:inline-block;">
+            <img src="${U.esc(url)}" style="height:48px;width:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);" onerror="this.style.display='none'">
+            <button onclick="Messages._removeMedia(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:16px;height:16px;font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+          </div>`
+        ).join('');
+      }
+    } catch(e) { Toast.show('Upload failed', e.message, 'error', '⚠️'); }
+    input.value = '';
+  },
+
+  _removeMedia(idx) {
+    this._replyMedia.splice(idx, 1);
+    const preview = document.getElementById('msg-media-preview');
+    if (preview) {
+      preview.innerHTML = this._replyMedia.map((url, i) =>
+        `<div style="position:relative;display:inline-block;">
+          <img src="${U.esc(url)}" style="height:48px;width:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">
+          <button onclick="Messages._removeMedia(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:16px;height:16px;font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+        </div>`
+      ).join('');
+    }
+  },
+
+  // ── Send reply ───────────────────────────────────────────────────────────
+
   async sendReply(convId) {
     const inp = document.getElementById('msg-reply-input');
-    const content = inp?.value.trim();
-    if (!content) return;
+    const content = inp?.value.trim() || '';
+    const media = [...this._replyMedia];
+    if (!content && !media.length) return;
     inp.value = '';
+    inp.style.height = 'auto';
+    this._replyMedia = [];
+    const preview = document.getElementById('msg-media-preview');
+    if (preview) preview.innerHTML = '';
     try {
-      await Api.replyMessage(convId, content);
+      await Api.replyMessage(convId, content, media);
       await this.openConversation(convId, true);
     } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
   },
+
+  // ── User: compose new message (no order) ────────────────────────────────
+
+  showUserCompose() {
+    if (!Auth.user) return UI.openAuth('login');
+    const thread = document.getElementById('messages-thread');
+    if (!thread) return;
+    thread.innerHTML = `
+      <div style="padding:22px 20px;">
+        <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:4px;">💬 New Message</div>
+        <div style="font-size:.74rem;color:var(--text-3);margin-bottom:18px;">Send a message to Pa_mSikA support</div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Subject</label>
+          <input id="uc-subject" value="General Enquiry" style="width:100%;font-size:.82rem;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Message</label>
+          <textarea id="uc-message" placeholder="Write your message here…" rows="4" style="width:100%;font-size:.82rem;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Attach images (optional)</label>
+          <input type="file" id="uc-files" accept="image/*" multiple style="font-size:.75rem;">
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-gold btn-sm" onclick="Messages._submitUserCompose()">Send Message</button>
+          <button onclick="Messages._clearThread()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 14px;font-size:.78rem;cursor:pointer;color:var(--text-2);">Cancel</button>
+        </div>
+      </div>`;
+  },
+
+  async _submitUserCompose() {
+    const subject = document.getElementById('uc-subject')?.value.trim() || 'General Enquiry';
+    const message = document.getElementById('uc-message')?.value.trim() || '';
+    const filesInput = document.getElementById('uc-files');
+    let mediaUrls = [];
+    if (!message) return Toast.show('Error', 'Please write a message', 'error', '⚠️');
+    if (filesInput?.files?.length) {
+      Toast.show('Uploading images…', '', 'info', '⏳');
+      const formData = new FormData();
+      Array.from(filesInput.files).forEach(f => formData.append('files', f));
+      try {
+        const res = await fetch(API_BASE + '/admin/upload/images', {
+          method: 'POST',
+          headers: Api._token ? { Authorization: 'Bearer ' + Api._token } : {},
+          body: formData,
+        });
+        if (res.ok) { const d = await res.json(); mediaUrls = d.urls || []; }
+      } catch {}
+    }
+    try {
+      const res = await Api.startConversation(null, subject, message, mediaUrls);
+      Toast.show('Message sent! 💬', 'We\'ll reply soon', 'success', '✅');
+      await this.load();
+      await this.openConversation(res.conversation_id);
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  // ── Admin: search user and compose ──────────────────────────────────────
+
+  showAdminCompose() {
+    const thread = document.getElementById('messages-thread');
+    if (!thread) return;
+    thread.innerHTML = `
+      <div style="padding:22px 20px;">
+        <div style="font-family:var(--font-display);font-size:1.1rem;margin-bottom:4px;">✏️ New Message to User</div>
+        <div style="font-size:.74rem;color:var(--text-3);margin-bottom:18px;">Search by registered email or name</div>
+        <div style="margin-bottom:12px;position:relative;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Find User</label>
+          <div style="display:flex;gap:8px;">
+            <input id="ac-search" placeholder="email or name…" style="flex:1;font-size:.82rem;" oninput="Messages._debounceSearch(this.value)">
+            <button onclick="Messages._doUserSearch()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 12px;font-size:.78rem;cursor:pointer;">🔍</button>
+          </div>
+          <div id="ac-results" style="position:absolute;top:100%;left:0;right:0;background:var(--bg-card);border:1px solid var(--border);border-radius:var(--radius-sm);z-index:100;max-height:180px;overflow-y:auto;display:none;"></div>
+        </div>
+        <div id="ac-selected" style="display:none;margin-bottom:12px;padding:10px;background:var(--gold-dim);border:1px solid var(--gold);border-radius:var(--radius-sm);font-size:.78rem;">
+          <span id="ac-selected-label"></span>
+          <button onclick="Messages._clearUserSelection()" style="float:right;background:none;border:none;cursor:pointer;font-size:.8rem;color:var(--text-3);">✕</button>
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Subject</label>
+          <input id="ac-subject" value="Message from Pa_mSikA" style="width:100%;font-size:.82rem;box-sizing:border-box;">
+        </div>
+        <div style="margin-bottom:12px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Message</label>
+          <textarea id="ac-message" placeholder="Write your message…" rows="4" style="width:100%;font-size:.82rem;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <div style="margin-bottom:16px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Attach images (optional)</label>
+          <input type="file" id="ac-files" accept="image/*" multiple style="font-size:.75rem;">
+        </div>
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-gold btn-sm" onclick="Messages._submitAdminCompose()">Send Message</button>
+          <button onclick="Messages._clearThread()" style="background:none;border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 14px;font-size:.78rem;cursor:pointer;color:var(--text-2);">Cancel</button>
+        </div>
+      </div>`;
+    this._selectedUserId = null;
+    this._searchTimer = null;
+  },
+
+  _debounceSearch(val) {
+    clearTimeout(this._searchTimer);
+    if (val.length < 2) { const r = document.getElementById('ac-results'); if(r) r.style.display='none'; return; }
+    this._searchTimer = setTimeout(() => this._doUserSearch(), 350);
+  },
+
+  async _doUserSearch() {
+    const q = document.getElementById('ac-search')?.value.trim();
+    if (!q || q.length < 2) return;
+    const results = document.getElementById('ac-results');
+    if (!results) return;
+    try {
+      const users = await Api.adminSearchUsers(q);
+      if (!users.length) {
+        results.innerHTML = '<div style="padding:10px 14px;font-size:.76rem;color:var(--text-3);">No users found</div>';
+      } else {
+        results.innerHTML = users.map(u =>
+          `<div onclick="Messages._selectUser('${u.id}','${U.esc(u.full_name)}','${U.esc(u.email)}')"
+               style="padding:9px 14px;cursor:pointer;font-size:.78rem;border-bottom:1px solid var(--border);"
+               onmouseover="this.style.background='var(--bg-card-2)'" onmouseout="this.style.background=''">
+            <div style="font-weight:600;">${U.esc(u.full_name)}</div>
+            <div style="color:var(--text-3);font-size:.72rem;">${U.esc(u.email)}</div>
+          </div>`
+        ).join('');
+      }
+      results.style.display = 'block';
+    } catch(e) { Toast.show('Search error', e.message, 'error', '⚠️'); }
+  },
+
+  _selectUser(id, name, email) {
+    this._selectedUserId = id;
+    const sel = document.getElementById('ac-selected');
+    const lbl = document.getElementById('ac-selected-label');
+    const res = document.getElementById('ac-results');
+    if (lbl) lbl.textContent = `✅ ${name} (${email})`;
+    if (sel) sel.style.display = 'block';
+    if (res) res.style.display = 'none';
+    const inp = document.getElementById('ac-search');
+    if (inp) inp.value = '';
+  },
+
+  _clearUserSelection() {
+    this._selectedUserId = null;
+    const sel = document.getElementById('ac-selected');
+    if (sel) sel.style.display = 'none';
+  },
+
+  async _submitAdminCompose() {
+    if (!this._selectedUserId) return Toast.show('Error', 'Select a user first', 'error', '⚠️');
+    const subject = document.getElementById('ac-subject')?.value.trim() || 'Message from Pa_mSikA';
+    const message = document.getElementById('ac-message')?.value.trim() || '';
+    const filesInput = document.getElementById('ac-files');
+    let mediaUrls = [];
+    if (!message) return Toast.show('Error', 'Please write a message', 'error', '⚠️');
+    if (filesInput?.files?.length) {
+      Toast.show('Uploading images…', '', 'info', '⏳');
+      const formData = new FormData();
+      Array.from(filesInput.files).forEach(f => formData.append('files', f));
+      try {
+        const res = await fetch(API_BASE + '/admin/upload/images', {
+          method: 'POST',
+          headers: Api._token ? { Authorization: 'Bearer ' + Api._token } : {},
+          body: formData,
+        });
+        if (res.ok) { const d = await res.json(); mediaUrls = d.urls || []; }
+      } catch {}
+    }
+    try {
+      const res = await Api.adminStartConversation(this._selectedUserId, subject, message, mediaUrls);
+      Toast.show('Message sent! 💬', '', 'success', '✅');
+      this._selectedUserId = null;
+      await this.load();
+      await this.openConversation(res.conversation_id);
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  // ── Start from order (user taps 💬 on order) ────────────────────────────
 
   async startFromOrder(orderId, orderRef) {
     if (!Auth.user) return UI.openAuth('login');
     Views.show('messages');
     const subject = `Order #${orderRef} Enquiry`;
-    // Show compose form
     const thread = document.getElementById('messages-thread');
     if (thread) thread.innerHTML = `
-      <div style="padding:20px;">
-        <div style="font-family:var(--font-display);font-size:1rem;margin-bottom:14px;">💬 Message about Order #${orderRef}</div>
-        <textarea id="new-msg-content" placeholder="Describe your issue or question…" style="width:100%;height:100px;font-size:.82rem;box-sizing:border-box;margin-bottom:10px;resize:vertical;"></textarea>
+      <div style="padding:22px 20px;">
+        <div style="font-family:var(--font-display);font-size:1rem;margin-bottom:14px;">💬 Message about Order #${U.esc(orderRef)}</div>
+        <div style="margin-bottom:10px;">
+          <textarea id="new-msg-content" placeholder="Describe your issue or question…" rows="4" style="width:100%;font-size:.82rem;box-sizing:border-box;resize:vertical;"></textarea>
+        </div>
+        <div style="margin-bottom:14px;">
+          <label style="font-size:.74rem;font-weight:600;display:block;margin-bottom:4px;">Attach images (optional)</label>
+          <input type="file" id="new-msg-files" accept="image/*" multiple style="font-size:.75rem;">
+        </div>
         <button class="btn btn-gold btn-sm" onclick="Messages._sendFirst('${orderId}','${subject}')">Send Message</button>
       </div>`;
   },
 
   async _sendFirst(orderId, subject) {
-    const content = document.getElementById('new-msg-content')?.value.trim();
+    const content = document.getElementById('new-msg-content')?.value.trim() || '';
+    const filesInput = document.getElementById('new-msg-files');
+    let mediaUrls = [];
     if (!content) return Toast.show('Error', 'Write a message first', 'error', '⚠️');
+    if (filesInput?.files?.length) {
+      Toast.show('Uploading images…', '', 'info', '⏳');
+      const formData = new FormData();
+      Array.from(filesInput.files).forEach(f => formData.append('files', f));
+      try {
+        const res = await fetch(API_BASE + '/admin/upload/images', {
+          method: 'POST',
+          headers: Api._token ? { Authorization: 'Bearer ' + Api._token } : {},
+          body: formData,
+        });
+        if (res.ok) { const d = await res.json(); mediaUrls = d.urls || []; }
+      } catch {}
+    }
     try {
-      const res = await Api.startConversation(orderId, subject, content);
+      const res = await Api.startConversation(orderId, subject, content, mediaUrls);
       Toast.show('Message sent! 💬', 'Admin will reply soon', 'success', '✅');
       await this.load();
       await this.openConversation(res.conversation_id);
     } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  // ── Helpers ──────────────────────────────────────────────────────────────
+
+  _clearThread() {
+    this._activeConv = null;
+    const el = document.getElementById('messages-thread');
+    if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;color:var(--text-3);font-size:.82rem;text-align:center;"><div><div style="font-size:2rem;margin-bottom:8px;">💬</div>Select a conversation or tap ✏️ New</div></div>';
   },
 };
 

@@ -1,5 +1,9 @@
 from fastapi import APIRouter
-from app.api.v1.endpoints import auth, products, cart, orders, favorites, affiliate, admin, analytics, imgproxy, upload, password_reset, notifications, reviews, promo, export, community, messages, community, messages
+from app.api.v1.endpoints import (
+    auth, products, cart, orders, favorites, affiliate, admin,
+    analytics, imgproxy, upload, password_reset, notifications,
+    reviews, promo, export, community, messages
+)
 
 api_router = APIRouter(prefix="/v1")
 
@@ -18,7 +22,5 @@ api_router.include_router(notifications.router)
 api_router.include_router(reviews.router)
 api_router.include_router(promo.router)
 api_router.include_router(export.router)
-api_router.include_router(community.router)
-api_router.include_router(messages.router)
 api_router.include_router(community.router)
 api_router.include_router(messages.router)

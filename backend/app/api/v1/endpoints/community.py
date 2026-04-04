@@ -16,6 +16,15 @@ from sqlalchemy.dialects.postgresql import UUID
 
 router = APIRouter(prefix="/community", tags=["community"])
 
+import re, html as _html
+
+def _sanitize(text: str, max_len: int = 2000) -> str:
+    """Strip HTML tags, decode entities, normalize whitespace."""
+    clean = re.sub(r"<[^>]+>", "", text or "")
+    clean = _html.unescape(clean)
+    clean = re.sub(r"[ \t]+", " ", clean).strip()
+    return clean[:max_len]
+
 
 class CommunityPost(Base):
     __tablename__ = "community_posts"
@@ -73,7 +82,7 @@ async def create_post(
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
-    content = (payload.get("content") or "").strip()
+    content = _sanitize(payload.get("content") or "")
     images = payload.get("images", [])
     if not content and not images:
         raise HTTPException(status_code=400, detail="Post needs content or images")
@@ -132,7 +141,7 @@ async def toggle_like(post_id: str, db: AsyncSession = Depends(get_db), current_
 
 @router.post("/posts/{post_id}/comments")
 async def add_comment(post_id: str, payload: dict, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    content = (payload.get("content") or "").strip()
+    content = _sanitize(payload.get("content") or "", max_len=1000)
     if not content:
         raise HTTPException(status_code=400, detail="Comment cannot be empty")
     result = await db.execute(select(CommunityPost).where(CommunityPost.id == post_id, CommunityPost.deleted_at.is_(None)))

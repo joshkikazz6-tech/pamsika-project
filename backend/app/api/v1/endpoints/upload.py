@@ -97,3 +97,30 @@ async def upload_images(
         urls.append(url)
 
     return {"urls": urls}
+
+
+@router.post("/message-images", tags=["messages"])
+async def upload_message_images(
+    files: List[UploadFile] = File(...),
+    current_user=Depends(__import__('app.api.deps', fromlist=['get_current_user']).get_current_user),
+):
+    """Upload images for DM messages. Available to any authenticated user."""
+    if len(files) > 5:
+        raise HTTPException(status_code=400, detail="Maximum 5 images per message")
+
+    use_cloudinary = bool(CLOUDINARY_URL)
+    urls = []
+
+    for file in files:
+        if file.content_type not in ALLOWED_TYPES:
+            raise HTTPException(status_code=415, detail=f"Unsupported type: {file.content_type}")
+        data = await file.read()
+        if len(data) > MAX_FILE_SIZE:
+            raise HTTPException(status_code=413, detail=f"{file.filename!r} exceeds 8 MB")
+        if use_cloudinary:
+            url = await _upload_to_cloudinary(data, file.filename or "image.jpg")
+        else:
+            url = await _upload_local(data, file.filename or "image.jpg")
+        urls.append(url)
+
+    return {"urls": urls}

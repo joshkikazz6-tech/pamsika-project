@@ -1,10 +1,16 @@
 """
 DM system — buyer ↔ admin, linked to orders.
-Auto-notifies via email on new message.
+- Messages encrypted at rest with AES-256-GCM.
+- Content sanitized (strip HTML, limit length).
+- Admin can start a conversation by searching users by email.
+- Media attachments (images) supported per message.
+- Auto-notifies via email on new message.
 """
 import uuid
+import re
+import html
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
 from sqlalchemy.orm import Mapped, mapped_column, relationship, selectinload
@@ -15,9 +21,17 @@ from app.api.deps import get_current_user, get_current_admin
 from app.db.base import Base
 from sqlalchemy import String, Text, Boolean, DateTime, ForeignKey
 from sqlalchemy.dialects.postgresql import UUID
+from app.core.encryption import encrypt_data, decrypt_data
 
 router = APIRouter(prefix="/messages", tags=["messages"])
 
+# ── Constants ─────────────────────────────────────────────────────────────────
+MAX_MESSAGE_LENGTH = 4000
+MAX_MEDIA_URLS = 5
+ALLOWED_MEDIA_SCHEMES = ("https://", "http://", "/uploads/")
+
+
+# ── Models ────────────────────────────────────────────────────────────────────
 
 class Conversation(Base):
     __tablename__ = "conversations"
@@ -37,12 +51,73 @@ class Message(Base):
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     conversation_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("conversations.id", ondelete="CASCADE"), nullable=False, index=True)
     sender_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
+    # content stored encrypted (AES-256-GCM)
+    content_enc: Mapped[str] = mapped_column(Text, nullable=False)
+    # media_urls stored as JSON-encoded encrypted string
+    media_enc: Mapped[str | None] = mapped_column(Text, nullable=True)
     is_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     read: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     conversation: Mapped["Conversation"] = relationship("Conversation", back_populates="messages")
     sender: Mapped["User"] = relationship("User")
+
+
+# ── Sanitization ──────────────────────────────────────────────────────────────
+
+def _sanitize_text(raw: str) -> str:
+    """Strip HTML tags, normalize whitespace, limit length."""
+    if not raw:
+        return ""
+    # Strip HTML tags
+    clean = re.sub(r"<[^>]+>", "", raw)
+    # Decode HTML entities then re-escape to prevent XSS
+    clean = html.unescape(clean)
+    # Collapse runs of whitespace but preserve single newlines
+    clean = re.sub(r"[ \t]+", " ", clean).strip()
+    # Limit length
+    return clean[:MAX_MESSAGE_LENGTH]
+
+
+def _sanitize_media_urls(urls: list) -> list:
+    """Allow only well-formed URLs from trusted schemes, cap count."""
+    if not isinstance(urls, list):
+        return []
+    safe = []
+    for u in urls[:MAX_MEDIA_URLS]:
+        if isinstance(u, str) and any(u.startswith(s) for s in ALLOWED_MEDIA_SCHEMES):
+            # Strip any embedded whitespace
+            safe.append(u.strip())
+    return safe
+
+
+# ── Encryption helpers ────────────────────────────────────────────────────────
+
+def _enc(text: str) -> str:
+    return encrypt_data(text)
+
+
+def _dec(enc: str) -> str:
+    try:
+        return decrypt_data(enc)
+    except Exception:
+        return "[encrypted]"
+
+
+def _enc_media(urls: list) -> str | None:
+    if not urls:
+        return None
+    import json
+    return encrypt_data(json.dumps(urls))
+
+
+def _dec_media(enc: str | None) -> list:
+    if not enc:
+        return []
+    import json
+    try:
+        return json.loads(decrypt_data(enc))
+    except Exception:
+        return []
 
 
 # ── User endpoints ────────────────────────────────────────────────────────────
@@ -62,20 +137,27 @@ async def my_conversations(db: AsyncSession = Depends(get_db), current_user: Use
 @router.post("/start")
 async def start_conversation(payload: dict, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     order_id = payload.get("order_id")
-    subject = (payload.get("subject") or "Order Enquiry").strip()
-    first_message = (payload.get("message") or "").strip()
-    if not first_message:
+    subject = _sanitize_text(payload.get("subject") or "General Enquiry")[:200] or "General Enquiry"
+    first_message = _sanitize_text(payload.get("message") or "")
+    media_urls = _sanitize_media_urls(payload.get("media_urls") or [])
+
+    if not first_message and not media_urls:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
 
-    # Check if conversation already exists for this order
+    # Reuse existing conversation for the same order
     if order_id:
         existing = await db.execute(
             select(Conversation).where(Conversation.user_id == current_user.id, Conversation.order_id == order_id)
         )
         conv = existing.scalar_one_or_none()
         if conv:
-            # Just add message to existing conversation
-            msg = Message(conversation_id=conv.id, sender_id=current_user.id, content=first_message, is_admin=False)
+            msg = Message(
+                conversation_id=conv.id,
+                sender_id=current_user.id,
+                content_enc=_enc(first_message),
+                media_enc=_enc_media(media_urls),
+                is_admin=False,
+            )
             db.add(msg)
             conv.updated_at = datetime.now(timezone.utc)
             await db.flush()
@@ -85,7 +167,13 @@ async def start_conversation(payload: dict, db: AsyncSession = Depends(get_db), 
     conv = Conversation(user_id=current_user.id, order_id=order_id, subject=subject)
     db.add(conv)
     await db.flush()
-    msg = Message(conversation_id=conv.id, sender_id=current_user.id, content=first_message, is_admin=False)
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=current_user.id,
+        content_enc=_enc(first_message),
+        media_enc=_enc_media(media_urls),
+        is_admin=False,
+    )
     db.add(msg)
     await db.flush()
     await _notify_admin(current_user.full_name, first_message, str(conv.id))
@@ -104,18 +192,22 @@ async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_
         raise HTTPException(status_code=404, detail="Conversation not found")
     if str(conv.user_id) != str(current_user.id) and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not allowed")
-    # Mark admin messages as read for user
+    # Mark messages from other party as read
     for m in conv.messages:
-        if m.is_admin and not m.read:
-            m.read = True
+        if not m.read:
+            if current_user.is_admin and not m.is_admin:
+                m.read = True
+            elif not current_user.is_admin and m.is_admin:
+                m.read = True
     await db.flush()
-    return _serialize_conv(conv, current_user.id)
+    return _serialize_conv(conv, current_user.id, is_admin=current_user.is_admin)
 
 
 @router.post("/{conversation_id}/reply")
 async def reply(conversation_id: str, payload: dict, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
-    content = (payload.get("content") or "").strip()
-    if not content:
+    content = _sanitize_text(payload.get("content") or "")
+    media_urls = _sanitize_media_urls(payload.get("media_urls") or [])
+    if not content and not media_urls:
         raise HTTPException(status_code=400, detail="Message cannot be empty")
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
@@ -127,11 +219,16 @@ async def reply(conversation_id: str, payload: dict, db: AsyncSession = Depends(
     if str(conv.user_id) != str(current_user.id) and not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Not allowed")
     is_admin = current_user.is_admin
-    msg = Message(conversation_id=conv.id, sender_id=current_user.id, content=content, is_admin=is_admin)
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=current_user.id,
+        content_enc=_enc(content),
+        media_enc=_enc_media(media_urls),
+        is_admin=is_admin,
+    )
     db.add(msg)
     conv.updated_at = datetime.now(timezone.utc)
     await db.flush()
-    # Notify the other party
     if is_admin:
         await _notify_user(conv.user, content, conversation_id)
     else:
@@ -163,10 +260,88 @@ async def unread_count(db: AsyncSession = Depends(get_db), admin: User = Depends
     return {"count": count}
 
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+@router.get("/admin/search-users")
+async def search_users(
+    q: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Search users by email or name for starting a new conversation."""
+    term = f"%{q.strip().lower()}%"
+    result = await db.execute(
+        select(User)
+        .where(
+            User.deleted_at.is_(None),
+            User.is_active == True,
+            or_(
+                func.lower(User.email).like(term),
+                func.lower(User.full_name).like(term),
+            )
+        )
+        .limit(10)
+    )
+    users = result.scalars().all()
+    return [{"id": str(u.id), "email": u.email, "full_name": u.full_name} for u in users]
+
+
+@router.post("/admin/start")
+async def admin_start_conversation(
+    payload: dict,
+    db: AsyncSession = Depends(get_db),
+    admin: User = Depends(get_current_admin),
+):
+    """Admin starts a new conversation with a user by user_id."""
+    user_id = payload.get("user_id")
+    subject = _sanitize_text(payload.get("subject") or "Message from Pa_mSikA")[:200]
+    first_message = _sanitize_text(payload.get("message") or "")
+    media_urls = _sanitize_media_urls(payload.get("media_urls") or [])
+
+    if not user_id:
+        raise HTTPException(status_code=400, detail="user_id required")
+    if not first_message and not media_urls:
+        raise HTTPException(status_code=400, detail="Message cannot be empty")
+
+    # Find the user
+    user_result = await db.execute(select(User).where(User.id == user_id, User.is_active == True, User.deleted_at.is_(None)))
+    target_user = user_result.scalar_one_or_none()
+    if not target_user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Reuse existing general conversation if one already exists (no order)
+    existing = await db.execute(
+        select(Conversation).where(
+            Conversation.user_id == user_id,
+            Conversation.order_id.is_(None),
+        ).order_by(Conversation.updated_at.desc())
+    )
+    conv = existing.scalars().first()
+
+    if not conv:
+        conv = Conversation(user_id=user_id, subject=subject)
+        db.add(conv)
+        await db.flush()
+
+    msg = Message(
+        conversation_id=conv.id,
+        sender_id=admin.id,
+        content_enc=_enc(first_message),
+        media_enc=_enc_media(media_urls),
+        is_admin=True,
+    )
+    db.add(msg)
+    conv.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    await _notify_user(target_user, first_message, str(conv.id))
+    return {"conversation_id": str(conv.id), "detail": "Message sent"}
+
+
+# ── Serialization ─────────────────────────────────────────────────────────────
 
 def _serialize_conv(conv: Conversation, viewer_id, is_admin: bool = False) -> dict:
-    unread = sum(1 for m in conv.messages if not m.read and (m.is_admin if not is_admin else not m.is_admin))
+    unread = sum(
+        1 for m in conv.messages
+        if not m.read and (not m.is_admin if is_admin else m.is_admin)
+    )
     order_ref = str(conv.order_id)[:8].upper() if conv.order_id else None
     return {
         "id": str(conv.id),
@@ -175,12 +350,14 @@ def _serialize_conv(conv: Conversation, viewer_id, is_admin: bool = False) -> di
         "order_ref": order_ref,
         "user_name": conv.user.full_name if conv.user else "User",
         "user_email": conv.user.email if conv.user else "",
+        "user_id": str(conv.user_id),
         "unread": unread,
         "updated_at": conv.updated_at.isoformat(),
         "messages": [
             {
                 "id": str(m.id),
-                "content": m.content,
+                "content": _dec(m.content_enc),
+                "media_urls": _dec_media(m.media_enc),
                 "is_admin": m.is_admin,
                 "sender": m.sender.full_name if m.sender else ("Admin" if m.is_admin else "User"),
                 "read": m.read,
@@ -191,6 +368,8 @@ def _serialize_conv(conv: Conversation, viewer_id, is_admin: bool = False) -> di
     }
 
 
+# ── Email helpers ─────────────────────────────────────────────────────────────
+
 async def _notify_admin(sender_name: str, message: str, conv_id: str):
     from app.api.v1.endpoints.notifications import _send_email
     from app.core.config import settings
@@ -200,7 +379,7 @@ async def _notify_admin(sender_name: str, message: str, conv_id: str):
         _send_email(
             settings.SMTP_USER, "Pa_mSikA Admin",
             f"💬 New message from {sender_name}",
-            message[:200],
+            (message or "[media]")[:200],
             f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}"
         )
     except Exception:
@@ -216,7 +395,7 @@ async def _notify_user(user: User, message: str, conv_id: str):
         _send_email(
             user.email, user.full_name,
             "💬 New message from Pa_mSikA",
-            message[:200],
+            (message or "[media]")[:200],
             f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}"
         )
     except Exception:

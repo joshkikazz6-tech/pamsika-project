@@ -8,6 +8,7 @@ const API_BASE = '/api/v1';
 
 const Api = {
   _token: null,
+  BASE: '/api/v1',
   _sessionId: null,
 
   init() {
@@ -215,11 +216,13 @@ const Api = {
 
   // ── Messages ──────────────────────────────────────────────
   async myConversations() { return this.get('/messages/my'); },
-  async startConversation(orderId, subject, message) { return this.post('/messages/start', { order_id: orderId, subject, message }); },
+  async startConversation(orderId, subject, message, mediaUrls) { return this.post('/messages/start', { order_id: orderId, subject, message, media_urls: mediaUrls || [] }); },
   async getConversation(id) { return this.get('/messages/' + id); },
-  async replyMessage(convId, content) { return this.post('/messages/' + convId + '/reply', { content }); },
+  async replyMessage(convId, content, mediaUrls) { return this.post('/messages/' + convId + '/reply', { content, media_urls: mediaUrls || [] }); },
   async adminAllConversations() { return this.get('/messages/admin/all'); },
   async adminUnreadCount() { return this.get('/messages/admin/unread-count'); },
+  async adminSearchUsers(q) { return this.get('/messages/admin/search-users?q=' + encodeURIComponent(q)); },
+  async adminStartConversation(userId, subject, message, mediaUrls) { return this.post('/messages/admin/start', { user_id: userId, subject, message, media_urls: mediaUrls || [] }); },
 
   // ── Community ─────────────────────────────────────────────
   async getCommunityPosts() { return this.get('/community/posts'); },
