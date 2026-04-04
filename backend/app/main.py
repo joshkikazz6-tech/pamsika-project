@@ -19,7 +19,16 @@ from app.api.v1.router import api_router
 from app.middleware.security import SecurityHeadersMiddleware
 from app.db.session import engine
 from app.db.base import Base
-import app.db  # noqa — registers all models with Base.metadata
+# Register ALL models with Base.metadata before create_all runs
+from app.models.user import User                                           # noqa
+from app.models.product import Product                                     # noqa
+from app.models.cart import Cart, CartItem                                 # noqa
+from app.models.order import Order, OrderItem                              # noqa
+from app.models.favorite import Favorite                                   # noqa
+from app.models.affiliate import AffiliateClick, AffiliateWithdrawal      # noqa
+from app.models.audit import AuditLog                                      # noqa
+from app.models.community import CommunityPost, CommunityComment, PostLike # noqa
+from app.models.messages import Conversation, Message                      # noqa
 
 
 class _SuppressHealthCheck(logging.Filter):

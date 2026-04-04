@@ -1,22 +1,21 @@
 """
 Community feed — admin posts, users comment and like.
+Content sanitized before storage.
 """
-import uuid
+import re
+import html as _html
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
-from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.orm import selectinload
 from app.db.session import get_db
 from app.models.user import User
+from app.models.community import CommunityPost, CommunityComment, PostLike
 from app.api.deps import get_current_user, get_current_admin
-from app.db.base import Base
-from sqlalchemy import String, Text, Integer, Boolean, DateTime, ForeignKey, JSON
-from sqlalchemy.dialects.postgresql import UUID
 
 router = APIRouter(prefix="/community", tags=["community"])
 
-import re, html as _html
 
 def _sanitize(text: str, max_len: int = 2000) -> str:
     """Strip HTML tags, decode entities, normalize whitespace."""
@@ -26,43 +25,8 @@ def _sanitize(text: str, max_len: int = 2000) -> str:
     return clean[:max_len]
 
 
-class CommunityPost(Base):
-    __tablename__ = "community_posts"
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    images: Mapped[list] = mapped_column(JSON, default=list, nullable=False)
-    likes: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    comments: Mapped[list["CommunityComment"]] = relationship("CommunityComment", back_populates="post", cascade="all, delete-orphan")
-    liked_by: Mapped[list["PostLike"]] = relationship("PostLike", back_populates="post", cascade="all, delete-orphan")
-
-
-class CommunityComment(Base):
-    __tablename__ = "community_comments"
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("community_posts.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    content: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
-    deleted_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
-    post: Mapped["CommunityPost"] = relationship("CommunityPost", back_populates="comments")
-    user: Mapped["User"] = relationship("User")
-
-
-class PostLike(Base):
-    __tablename__ = "post_likes"
-    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    post_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("community_posts.id", ondelete="CASCADE"), nullable=False)
-    user_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
-    post: Mapped["CommunityPost"] = relationship("CommunityPost", back_populates="liked_by")
-
-
-# ── Endpoints ─────────────────────────────────────────────────────────────────
-
 @router.get("/posts")
 async def get_posts(db: AsyncSession = Depends(get_db)):
-    from sqlalchemy.orm import selectinload
     result = await db.execute(
         select(CommunityPost)
         .where(CommunityPost.deleted_at.is_(None))
@@ -93,9 +57,8 @@ async def create_post(
     from app.api.v1.endpoints.notifications import _send_email
     from app.core.config import settings
     if settings.SMTP_PASSWORD:
-        from sqlalchemy import select as sel
         users_result = await db.execute(
-            sel(User).where(User.is_active == True, User.deleted_at.is_(None))
+            select(User).where(User.is_active == True, User.deleted_at.is_(None))
         )
         users = users_result.scalars().all()
         for u in users:
