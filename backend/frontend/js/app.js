@@ -457,13 +457,25 @@ const Messages = {
       const body = document.getElementById('msg-thread-body');
       // Only auto-scroll on initial open, not on silent poll refreshes
       if (body && !silent) body.scrollTop = body.scrollHeight;
-      // Restore any in-progress reply draft after re-render
+      // Restore any in-progress reply text draft after re-render
       if (draftText) {
         const inp = document.getElementById('msg-reply-input');
         if (inp) {
           inp.value = draftText;
           inp.style.height = 'auto';
           inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
+        }
+      }
+      // Restore staged media previews — the innerHTML replace wipes the preview div
+      if (this._replyMedia.length) {
+        const preview = document.getElementById('msg-media-preview');
+        if (preview) {
+          preview.innerHTML = this._replyMedia.map((url, i) =>
+            '<div style="position:relative;display:inline-block;">' +
+            '<img src="' + U.esc(url) + '" style="height:48px;width:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">' +
+            '<button onclick="Messages._removeMedia(' + i + ')" style="position:absolute;top:-4px;right:-4px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:16px;height:16px;font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>' +
+            '</div>'
+          ).join('');
         }
       }
     } catch(e) { if (!silent) Toast.show('Error', e.message, 'error', '⚠️'); }

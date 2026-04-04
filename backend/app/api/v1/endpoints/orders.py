@@ -264,7 +264,8 @@ async def create_direct_order(
     admin_user = admin_result.scalar_one_or_none()
     new_conv_id = None
     if admin_user:
-        # Link to the registered customer if logged in, else use admin as owner (self-note)
+        # conversation owner = registered customer (so it appears in THEIR /messages/my list)
+        # for guest orders, owner = admin (admin-only note; guest has no account to show it)
         conv_user_id = current_user.id if current_user else admin_user.id
         new_conv = Conversation(
             user_id=conv_user_id,
@@ -273,11 +274,14 @@ async def create_direct_order(
         )
         db.add(new_conv)
         await db.flush()
+        # is_admin=False → appears as a customer message in admin view (correct for an order alert)
+        # sender = current_user if logged in, else admin (system note for guest orders)
+        sender_id = current_user.id if current_user else admin_user.id
         db.add(Message(
             conversation_id=new_conv.id,
-            sender_id=admin_user.id,
+            sender_id=sender_id,
             content_enc=encrypt_data(auto_msg),
-            is_admin=True,
+            is_admin=False,
         ))
         await db.flush()
         new_conv_id = str(new_conv.id)

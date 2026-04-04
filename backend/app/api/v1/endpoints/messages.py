@@ -77,7 +77,10 @@ async def my_conversations(db: AsyncSession = Depends(get_db), current_user: Use
     result = await db.execute(
         select(Conversation)
         .where(Conversation.user_id == current_user.id)
-        .options(selectinload(Conversation.messages))
+        .options(
+            selectinload(Conversation.messages).selectinload(Message.sender),
+            selectinload(Conversation.user),
+        )
         .order_by(Conversation.updated_at.desc())
     )
     return [_serialize_conv(c, current_user.id) for c in result.scalars().all()]
@@ -180,7 +183,10 @@ async def admin_start_conversation(payload: dict, db: AsyncSession = Depends(get
 async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     result = await db.execute(
         select(Conversation).where(Conversation.id == conversation_id)
-        .options(selectinload(Conversation.messages).selectinload(Message.sender))
+        .options(
+            selectinload(Conversation.messages).selectinload(Message.sender),
+            selectinload(Conversation.user),
+        )
     )
     conv = result.scalar_one_or_none()
     if not conv:
@@ -245,7 +251,9 @@ def _serialize_conv(conv: Conversation, viewer_id, is_admin: bool = False) -> di
                 "content": _dec(m.content_enc),
                 "media_urls": _dec_media(m.media_enc),
                 "is_admin": m.is_admin,
-                "sender": m.sender.full_name if m.sender else ("Admin" if m.is_admin else "User"),
+                "sender": (getattr(m, '_sender_name', None) or
+                           (m.sender.full_name if getattr(m, 'sender', None) else None) or
+                           ("Pa_mSikA" if m.is_admin else "Customer")),
                 "read": m.read,
                 "created_at": m.created_at.isoformat(),
             }
