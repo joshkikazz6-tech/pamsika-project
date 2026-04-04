@@ -262,28 +262,38 @@ def _serialize_conv(conv: Conversation, viewer_id, is_admin: bool = False) -> di
 # ── Email helpers ─────────────────────────────────────────────────────────────
 
 async def _notify_admin(sender_name: str, message: str, conv_id: str):
-    from app.api.v1.endpoints.notifications import _send_email
+    from app.api.v1.endpoints.notifications import _send_bulk_email
     from app.core.config import settings
+    import threading
     if not settings.SMTP_PASSWORD:
         return
     try:
-        _send_email(settings.SMTP_USER, "Pa_mSikA Admin",
-                    f"💬 New message from {sender_name}",
-                    (message or "[media]")[:200],
-                    f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}")
+        t = threading.Thread(
+            target=_send_bulk_email,
+            args=([settings.SMTP_USER], f"💬 New message from {sender_name}",
+                  (message or "[media]")[:200],
+                  f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}"),
+            daemon=True
+        )
+        t.start()
     except Exception:
         pass
 
 
 async def _notify_user(user: User, message: str, conv_id: str):
-    from app.api.v1.endpoints.notifications import _send_email
+    from app.api.v1.endpoints.notifications import _send_bulk_email
     from app.core.config import settings
+    import threading
     if not settings.SMTP_PASSWORD:
         return
     try:
-        _send_email(user.email, user.full_name,
-                    "💬 New message from Pa_mSikA",
-                    (message or "[media]")[:200],
-                    f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}")
+        t = threading.Thread(
+            target=_send_bulk_email,
+            args=([user.email], "💬 New message from Pa_mSikA",
+                  (message or "[media]")[:200],
+                  f"{settings.FRONTEND_URL}/?view=messages&conv={conv_id}"),
+            daemon=True
+        )
+        t.start()
     except Exception:
         pass

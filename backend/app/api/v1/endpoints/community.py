@@ -5,7 +5,7 @@ Content sanitized before storage.
 import re
 import html as _html
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
@@ -43,6 +43,7 @@ async def get_posts(db: AsyncSession = Depends(get_db)):
 @router.post("/posts")
 async def create_post(
     payload: dict,
+    background_tasks: BackgroundTasks,
     db: AsyncSession = Depends(get_db),
     admin: User = Depends(get_current_admin),
 ):
@@ -53,21 +54,21 @@ async def create_post(
     post = CommunityPost(content=content, images=images)
     db.add(post)
     await db.flush()
-    # Notify all users
-    from app.api.v1.endpoints.notifications import _send_email
+    # Notify all users in background so request does not block
+    from app.api.v1.endpoints.notifications import _send_bulk_email
     from app.core.config import settings
     if settings.SMTP_PASSWORD:
         users_result = await db.execute(
             select(User).where(User.is_active == True, User.deleted_at.is_(None))
         )
-        users = users_result.scalars().all()
-        for u in users:
-            try:
-                _send_email(u.email, u.full_name, "📢 New Post on Pa_mSikA Community",
-                           content[:120] + ("…" if len(content) > 120 else ""),
-                           f"{settings.FRONTEND_URL}/?view=community")
-            except Exception:
-                pass
+        emails = [u.email for u in users_result.scalars().all()]
+        if emails:
+            background_tasks.add_task(
+                _send_bulk_email, emails,
+                "📢 New Post on Pa_mSikA Community",
+                content[:120] + ("…" if len(content) > 120 else ""),
+                f"{settings.FRONTEND_URL}/?view=community"
+            )
     return {"detail": "Post created", "id": str(post.id)}
 
 
