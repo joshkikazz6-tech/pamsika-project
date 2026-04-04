@@ -62,6 +62,97 @@ const Toast={
 };
 
 
+
+/* ── RECENTLY VIEWED ─────────────────────────────────────── */
+const RecentlyViewed = {
+  KEY: 'pm_recently_viewed',
+  MAX: 10,
+  get() {
+    try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch { return []; }
+  },
+  add(product) {
+    let items = this.get().filter(p => p.id !== product.id);
+    items.unshift({ id: product.id, name: product.name, price: product.price, images: product.images, category: product.category });
+    if (items.length > this.MAX) items = items.slice(0, this.MAX);
+    localStorage.setItem(this.KEY, JSON.stringify(items));
+  },
+  render() {
+    const items = this.get();
+    if (!items.length) return '';
+    return `<div style="margin:24px 0;">
+      <div style="font-family:var(--font-display);font-size:1rem;color:var(--text-2);margin-bottom:12px;">🕐 Recently Viewed</div>
+      <div style="display:flex;gap:10px;overflow-x:auto;padding-bottom:6px;">
+        ${items.map(p => `<div onclick="Products.openDetail('${p.id}')" style="flex-shrink:0;width:100px;cursor:pointer;">
+          <img src="${p.images?.[0] || 'https://placehold.co/100x100/161616/c8a84b?text=P'}" style="width:100px;height:100px;object-fit:cover;border-radius:var(--radius-sm);border:1px solid var(--border);">
+          <div style="font-size:.68rem;color:var(--text-2);margin-top:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${U.esc(U.trunc(p.name,16))}</div>
+          <div style="font-size:.72rem;color:var(--gold);">${U.fmt(p.price)}</div>
+        </div>`).join('')}
+      </div>
+    </div>`;
+  }
+};
+
+/* ── PRICE ALERTS ─────────────────────────────────────────── */
+const PriceAlerts = {
+  KEY: 'pm_price_alerts',
+  get() { try { return JSON.parse(localStorage.getItem(this.KEY) || '[]'); } catch { return []; } },
+  add(product) {
+    const alerts = this.get().filter(a => a.id !== product.id);
+    alerts.push({ id: product.id, name: product.name, price: product.price, targetPrice: product.price * 0.9 });
+    localStorage.setItem(this.KEY, JSON.stringify(alerts));
+    Toast.show('Price Alert Set! 🔔', `We'll notify you if ${U.trunc(product.name,20)} drops in price`, 'success', '💰', 4000);
+  },
+  remove(productId) {
+    const alerts = this.get().filter(a => a.id !== productId);
+    localStorage.setItem(this.KEY, JSON.stringify(alerts));
+  },
+  has(productId) { return this.get().some(a => a.id === productId); },
+  check(products) {
+    const alerts = this.get();
+    alerts.forEach(alert => {
+      const current = products.find(p => p.id === alert.id);
+      if (current && current.price < alert.price) {
+        Toast.show('📉 Price Drop!', `${U.trunc(alert.name,20)} dropped to ${U.fmt(current.price)}!`, 'success', '💰', 8000);
+        alert.price = current.price;
+      }
+    });
+    localStorage.setItem(this.KEY, JSON.stringify(alerts));
+  }
+};
+
+/* ── PUSH NOTIFICATIONS ───────────────────────────────────── */
+const PushNotif = {
+  async request() {
+    if (!('Notification' in window) || !('serviceWorker' in navigator)) {
+      Toast.show('Not supported', 'Push notifications not supported on this browser', 'info', '🔔'); return;
+    }
+    const perm = await Notification.requestPermission();
+    if (perm !== 'granted') { Toast.show('Blocked', 'Enable notifications in browser settings', 'info', '🔔'); return; }
+    try {
+      const reg = await navigator.serviceWorker.ready;
+      const sub = await reg.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: 'BEl62iUYgUivxIkv69yViEuiBIa-Ib9-SkvMeAtA3LFgDzkrxZJjSgSnfckjZkouYTQ_A1KHRJP2QGMHY5k3F4E'
+      });
+      await Api.subscribeNotifications(sub.toJSON(), Auth.user?.id || 'guest');
+      Toast.show('Notifications enabled! 🔔', 'You will be notified of new products', 'success', '✅');
+    } catch (e) {
+      Toast.show('Error', e.message, 'error', '⚠️');
+    }
+  }
+};
+
+/* ── DELIVERY ZONES ───────────────────────────────────────── */
+const DELIVERY_ZONES = {
+  'Lilongwe':  { days: '1-2', fee: 2000 },
+  'Blantyre':  { days: '2-3', fee: 3500 },
+  'Mzuzu':     { days: '3-4', fee: 4500 },
+  'Zomba':     { days: '2-3', fee: 3000 },
+};
+function getDeliveryInfo(location) {
+  return DELIVERY_ZONES[location] || { days: '3-7', fee: 5000 };
+}
+
 /* ── CONFIRM DIALOG ───────────────────────────────────────── */
 const Confirm = {
   show(message, opts = {}) {
@@ -496,6 +587,10 @@ const Products = {
     return map[sort] || 'newest';
   },
 
+  renderRecentlyViewed() {
+    const el = document.getElementById('recently-viewed-section');
+    if (el) el.innerHTML = RecentlyViewed.render();
+  },
   async load() {
     if (this._loading) return;
     this._loading = true;
@@ -533,7 +628,9 @@ const Products = {
 
       this._data = items;
       this._total = data.total || items.length;
+      PriceAlerts.check(items);
       this.render();
+      this.renderRecentlyViewed();
     } catch (e) {
       const grid = document.getElementById('products-grid');
       if (grid) grid.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><h3>Could not load products</h3><p>' + U.esc(e.message) + '</p><button class="btn btn-outline btn-sm" style="margin-top:14px" onclick="Products.load()">Retry</button></div>';
@@ -672,6 +769,7 @@ const Products = {
   async addToCart(id) {
     const p = this._data.find(x => String(x.id) === String(id));
     if (!p) return;
+    RecentlyViewed.add(p);
     await Cart.add(p);
     const btn = document.getElementById('cbtn-' + id);
     if (btn) { const orig = btn.innerHTML; btn.innerHTML = '✓'; btn.style.background = 'var(--green)'; setTimeout(() => { btn.innerHTML = orig; btn.style.background = ''; }, 1400); }
@@ -758,12 +856,28 @@ const Products = {
         <div class="prod-detail-box"><div class="prod-detail-lbl">Commission</div><div class="prod-detail-val" style="color:var(--teal);">💼 ${p.commission_percent || 5}% = ${comm}</div></div>
       </div>
       <p class="prod-desc">${U.esc(p.description)}</p>
+      <!-- Delivery Zone Info -->
+      ${(()=>{ const d=getDeliveryInfo(p.location); return `<div style="background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);padding:10px 14px;margin-bottom:12px;display:flex;gap:18px;font-size:.76rem;">
+        <span>🚚 <strong>Delivery:</strong> ${d.days} days</span>
+        <span>💵 <strong>Fee:</strong> ${U.fmt(d.fee)}</span>
+      </div>`; })()}
+      <!-- Price Alert Button -->
+      <div style="margin-bottom:12px;">
+        <button class="btn btn-ghost btn-sm" onclick="PriceAlerts.has('${p.id}') ? (PriceAlerts.remove('${p.id}'),Toast.show('Alert removed','','info','🔕')) : PriceAlerts.add(p)" style="font-size:.74rem;">
+          ${PriceAlerts.has(p.id) ? '🔕 Remove Price Alert' : '🔔 Alert me if price drops'}
+        </button>
+      </div>
       <div class="prod-modal-actions">
         <button class="btn btn-gold" onclick="Products.addToCartFromModal()">🛒 Add to Cart</button>
         <button class="btn" style="background:#25D366;color:#000;font-weight:700;" onclick="Products.orderNowModal();Modal.close('prod-modal')">⚡ Order Now</button>
         <button class="btn btn-ghost btn-sm" onclick="Products.toggleFav('${p.id}')">❤️</button>
         <button class="btn btn-ghost btn-sm" onclick="Products.copyInfo('${p.id}')">📋 Copy</button>
         <button class="btn btn-ghost btn-sm" onclick="Products._downloadImg()" title="Download product image">⬇️ Download</button>
+      </div>
+      <!-- Reviews Section -->
+      <div id="prod-reviews-${p.id}" style="margin-top:18px;border-top:1px solid var(--border);padding-top:14px;">
+        <div style="font-family:var(--font-display);font-size:.9rem;margin-bottom:10px;">⭐ Reviews</div>
+        <div id="reviews-loading-${p.id}" style="font-size:.76rem;color:var(--text-3);">Loading reviews…</div>
       </div>
       ${Aff.data ? `
         <div style="margin-top:14px;background:var(--gold-dim);border:1px solid var(--border-2);border-radius:var(--radius-sm);padding:12px;">
@@ -780,6 +894,24 @@ const Products = {
     document.getElementById('prod-modal-title').textContent = U.trunc(p.name, 40);
     this._mP = { ...p, images: imgsProxied }; this._mI = 0; this._zoomLevel = 1;
     Modal.open('prod-modal');
+    // Load reviews async
+    Api.getReviews(String(p.id)).then(data => {
+      const el = document.getElementById('reviews-loading-' + p.id);
+      if (!el) return;
+      if (!data.reviews.length) { el.innerHTML = '<span style="font-size:.74rem;color:var(--text-3);">No reviews yet. Buy this product to leave a review.</span>'; return; }
+      const stars = n => '⭐'.repeat(n) + '☆'.repeat(5-n);
+      el.innerHTML = `<div style="font-size:.78rem;color:var(--gold);margin-bottom:8px;">${stars(Math.round(data.average))} ${data.average}/5 (${data.count} review${data.count!==1?'s':''})</div>`
+        + data.reviews.map(r => `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;">
+          <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-3);">${stars(r.rating)}<span>${r.reviewer}</span></div>
+          ${r.comment ? `<div style="font-size:.75rem;margin-top:4px;">${U.esc(r.comment)}</div>` : ''}
+        </div>`).join('')
+        + (Auth.user ? `<div style="margin-top:10px;"><div style="font-size:.74rem;color:var(--text-3);margin-bottom:6px;">Leave a review:</div>
+          <div style="display:flex;gap:6px;margin-bottom:6px;">${[1,2,3,4,5].map(n=>`<button onclick="this.dataset.sel='1';document.getElementById('rev-rating-${p.id}').value=${n};document.querySelectorAll('.rev-star-${p.id}').forEach((b,i)=>b.style.opacity=i<${n}?'1':'.3')" class="rev-star-${p.id}" style="font-size:1.2rem;background:none;border:none;cursor:pointer;opacity:.3;">⭐</button>`).join('')}</div>
+          <input type="hidden" id="rev-rating-${p.id}" value="0">
+          <input id="rev-comment-${p.id}" placeholder="Comment (optional)" style="width:100%;font-size:.76rem;margin-bottom:6px;box-sizing:border-box;">
+          <button class="btn btn-gold btn-sm" onclick="Products._submitReview('${p.id}')">Submit Review</button>
+        </div>` : '');
+    }).catch(() => { const el = document.getElementById('reviews-loading-' + p.id); if (el) el.innerHTML = ''; });
   },
 
   _zoomLevel: 1,
@@ -798,6 +930,27 @@ const Products = {
   },
   _zoomBtn(dir) {
     this._setZoom(Math.min(3, Math.max(1, this._zoomLevel + dir * 0.5)));
+  },
+  async _submitReview(productId) {
+    const rating = parseInt(document.getElementById('rev-rating-' + productId)?.value || '0');
+    const comment = document.getElementById('rev-comment-' + productId)?.value.trim() || '';
+    if (!rating) return Toast.show('Select a rating', '', 'error', '⭐');
+    try {
+      await Api.addReview(productId, rating, comment);
+      Toast.show('Review submitted!', 'Thank you for your feedback', 'success', '⭐');
+      // Reload reviews
+      Api.getReviews(productId).then(data => {
+        const el = document.getElementById('reviews-loading-' + productId);
+        if (el && data.reviews.length) {
+          const stars = n => '⭐'.repeat(n) + '☆'.repeat(5-n);
+          el.innerHTML = `<div style="font-size:.78rem;color:var(--gold);margin-bottom:8px;">${stars(Math.round(data.average))} ${data.average}/5 (${data.count} reviews)</div>`
+            + data.reviews.map(r => `<div style="border:1px solid var(--border);border-radius:var(--radius-sm);padding:8px 10px;margin-bottom:6px;">
+              <div style="display:flex;justify-content:space-between;font-size:.7rem;color:var(--text-3);">${stars(r.rating)}<span>${r.reviewer}</span></div>
+              ${r.comment ? `<div style="font-size:.75rem;margin-top:4px;">${U.esc(r.comment)}</div>` : ''}
+            </div>`).join('');
+        }
+      }).catch(() => {});
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
   },
   async _downloadImg() {
     const p = this._mP; if (!p) return;
@@ -1195,6 +1348,11 @@ const Views = {
         <h3>👤 Profile</h3>
         <div class="acc-row"><div class="acc-lbl">Name</div><div class="acc-val">${U.esc(Auth.user.full_name || '')}</div></div>
         <div class="acc-row"><div class="acc-lbl">Email</div><div class="acc-val">${U.esc(Auth.user.email)}</div></div>
+        <div style="margin-top:16px;padding:14px;background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius-sm);">
+          <div style="font-size:.76rem;font-weight:600;margin-bottom:8px;">🔔 Push Notifications</div>
+          <div style="font-size:.74rem;color:var(--text-3);margin-bottom:10px;">Get notified of new products and order updates</div>
+          <button class="btn btn-outline btn-sm" onclick="PushNotif.request()">Enable Notifications</button>
+        </div>
         ${Auth.user.is_admin ? `
         <div style="margin-top:14px;padding:12px;background:var(--gold-dim);border:1px solid var(--border-2);border-radius:var(--radius-sm);">
           <div style="font-size:.62rem;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);margin-bottom:8px;">⚙️ Administrator</div>
@@ -1266,7 +1424,7 @@ const Admin = {
 
   _render() {
     const body = document.getElementById('admin-modal-body'); if (!body) return;
-    const tabs = [['overview', '📊 Overview'], ['orders', '📦 Orders'], ['products', '🛍 Products'], ['affiliates', '💼 Affiliates'], ['withdrawals', '💸 Withdrawals'], ['users', '👥 Users']];
+    const tabs = [['overview', '📊 Overview'], ['orders', '📦 Orders'], ['products', '🛍 Products'], ['affiliates', '💼 Affiliates'], ['withdrawals', '💸 Withdrawals'], ['users', '👥 Users'], ['promo', '🎟 Promos'], ['notif', '🔔 Notify']];
     body.innerHTML = `
       <div class="admin-wrap">
         <div class="admin-sidebar">
@@ -1296,6 +1454,8 @@ const Admin = {
         case 'affiliates': c.innerHTML = await this._affiliates(); break;
         case 'withdrawals': c.innerHTML = await this._withdrawals(); break;
         case 'users': c.innerHTML = await this._users(); break;
+        case 'promo': c.innerHTML = await this._promos(); break;
+        case 'notif': c.innerHTML = await this._notifPanel(); break;
       }
     } catch (e) {
       c.innerHTML = '<div style="padding:20px;color:var(--red);">Error: ' + U.esc(e.message) + '</div>';
@@ -1336,7 +1496,13 @@ const Admin = {
     const list = orders.items || orders || [];
     if (!list.length) return `<div class="admin-head"><h2>Orders</h2></div><p style="color:var(--text-3);font-size:.82rem;padding:18px 0;">No orders yet.</p>`;
     const pending = list.filter(o => (o.status || 'pending') === 'pending').length;
-    return `<div class="admin-head"><h2>Orders</h2><p>${list.length} total · <span style="color:var(--gold);">${pending} pending</span></p></div>
+    return `<div class="admin-head"><h2>Orders</h2><p>${list.length} total · <span style="color:var(--gold);">${pending} pending</span></p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        <button class="aff-copy-btn" onclick="Api.exportOrders('csv')" style="font-size:.66rem;">📄 Export CSV</button>
+        <button class="aff-copy-btn" onclick="Api.exportOrders('excel')" style="font-size:.66rem;">📊 Export Excel</button>
+        <button class="aff-copy-btn" onclick="Api.exportOrders('pdf')" style="font-size:.66rem;">📋 Export PDF</button>
+      </div>
+    </div>
       <p style="font-size:.68rem;color:var(--text-3);margin-bottom:10px;">💼 <strong>Commission flow:</strong> <span style="color:var(--teal);">✓ Done</span> = marks fulfilled &amp; credits affiliate commission. <span style="color:orange;">✕ Cancel</span> = cancels order &amp; reverses any credited commission. <span style="color:var(--red);">🗑</span> = removes from this panel only.</p>
       <div style="display:flex;justify-content:flex-end;margin-bottom:8px;">
         <button class="aff-copy-btn" style="color:var(--red);border-color:var(--red);font-size:.66rem;" onclick="Admin._clearAllOrders()">🗑 Clear All Orders</button>
@@ -1346,7 +1512,7 @@ const Admin = {
         <tbody>${list.map(o => `<tr>
           <td style="font-family:monospace;color:var(--gold);font-size:.68rem;">${String(o.id).substring(0, 8).toUpperCase()}</td>
           <td style="font-size:.72rem;">${U.esc(o.customer_name || o.contact_info?.name || 'Guest')}${o.customer_email ? `<br><span style="color:var(--text-3);font-size:.62rem;">${U.esc(o.customer_email)}</span>` : ''}</td>
-          <td style="font-size:.7rem;">${(o.items || []).map(i => U.trunc(i.product_snapshot?.name || 'Item', 14) + '×' + i.quantity).join(', ')}</td>
+          <td style="font-size:.7rem;">${(o.items || []).map(i => `<a href="/?product=${i.product_id || ''}" target="_blank" style="color:var(--gold);text-decoration:none;" title="View product">${U.trunc(i.product_snapshot?.name || 'Item', 14)}</a>×${i.quantity}`).join(', ')}</td>
           <td style="color:var(--gold);font-weight:600;">${U.fmt(o.total_amount)}</td>
           <td style="font-size:.72rem;">${U.esc(o.payment_method || '')}</td>
           <td style="font-family:monospace;font-size:.65rem;color:var(--teal);">${(o.items || []).map(i => i.affiliate_id).filter(Boolean).filter((v,i,a)=>a.indexOf(v)===i).join(', ') || '—'}</td>
@@ -1444,7 +1610,12 @@ const Admin = {
   async _withdrawals() {
     const wds = await Api.adminWithdrawals().catch(() => []);
     const pending = wds.filter(w => w.status === 'pending').length;
-    return `<div class="admin-head"><h2>Withdrawal Requests</h2><p>${pending} pending</p></div>
+    return `<div class="admin-head"><h2>Withdrawal Requests</h2><p>${pending} pending</p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('csv')" style="font-size:.66rem;">📄 Export CSV</button>
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('excel')" style="font-size:.66rem;">📊 Export Excel</button>
+        <button class="aff-copy-btn" onclick="Api.exportWithdrawals('pdf')" style="font-size:.66rem;">📋 Export PDF</button>
+      </div></div>
       ${!wds.length ? '<p style="color:var(--text-3);font-size:.8rem;padding:16px 0;">No requests yet.</p>' : `
       <div style="overflow-x:auto;"><table class="admin-table">
         <thead><tr><th>Ref</th><th>Affiliate</th><th>Amount</th><th>Method</th><th>Send To</th><th>Account Name</th><th>Account No.</th><th>Notes</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
@@ -1485,6 +1656,77 @@ const Admin = {
     if (!await Confirm.show('It will be removed from the admin panel permanently.', { title: 'Delete this order?', icon: '🗑️', iconColor: 'var(--red)', okText: 'Yes, Delete', okColor: 'var(--red)', okBorder: 'var(--red)' })) return;
     try { await Api.adminDeleteOrder(id); Toast.show('Deleted', 'Order removed', 'info', '🗑'); this._renderTab(); } catch (e) { Toast.show('Error', e.message, 'error', '⚠️'); }
   },
+  async _promos() {
+    const promos = await Api.adminListPromos().catch(() => []);
+    return `<div class="admin-head"><h2>🎟 Promo Codes</h2></div>
+      <div style="background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:16px;">
+        <div style="font-size:.78rem;font-weight:600;margin-bottom:10px;">Create New Promo Code</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;">
+          <div><label class="form-lbl">Code</label><input id="pc-code" placeholder="SAVE20" style="margin-top:4px;width:100%;box-sizing:border-box;text-transform:uppercase;"></div>
+          <div><label class="form-lbl">Discount %</label><input id="pc-disc" type="number" placeholder="20" min="1" max="100" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+          <div><label class="form-lbl">Max Uses (0=unlimited)</label><input id="pc-uses" type="number" value="0" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+          <div><label class="form-lbl">Expires (optional)</label><input id="pc-exp" type="datetime-local" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="Admin._createPromo()">➕ Create Code</button>
+      </div>
+      ${promos.length ? `<div style="overflow-x:auto;"><table class="admin-table">
+        <thead><tr><th>Code</th><th>Discount</th><th>Uses</th><th>Max</th><th>Expires</th><th>Status</th><th>Action</th></tr></thead>
+        <tbody>${promos.map(p => `<tr>
+          <td style="font-family:monospace;color:var(--gold);font-weight:700;">${p.code}</td>
+          <td>${p.discount_percent}%</td>
+          <td>${p.uses}</td>
+          <td>${p.max_uses || '∞'}</td>
+          <td style="font-size:.68rem;">${p.expires_at ? new Date(p.expires_at).toLocaleDateString() : '—'}</td>
+          <td><span class="wd-status wd-${p.is_active ? 'completed' : 'cancelled'}">${p.is_active ? 'Active' : 'Inactive'}</span></td>
+          <td><button class="aff-copy-btn" style="color:var(--red);border-color:var(--red);" onclick="Admin._deletePromo('${p.id}')">🗑 Delete</button></td>
+        </tr>`).join('')}</tbody>
+      </table></div>` : '<p style="font-size:.82rem;color:var(--text-3);">No promo codes yet.</p>'}`;
+  },
+
+  async _createPromo() {
+    const code = document.getElementById('pc-code')?.value.trim().toUpperCase();
+    const disc = parseFloat(document.getElementById('pc-disc')?.value);
+    const uses = parseInt(document.getElementById('pc-uses')?.value || '0');
+    const exp = document.getElementById('pc-exp')?.value || null;
+    if (!code || !disc) return Toast.show('Error', 'Fill code and discount', 'error', '⚠️');
+    try {
+      await Api.adminCreatePromo({ code, discount_percent: disc, max_uses: uses, expires_at: exp });
+      Toast.show('Promo created!', code, 'success', '🎟');
+      this._renderTab();
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async _deletePromo(id) {
+    if (!await Confirm.show('This promo code will be deleted.', { title: 'Delete promo?', icon: '🗑️', iconColor: 'var(--red)', okText: 'Delete', okColor: 'var(--red)', okBorder: 'var(--red)' })) return;
+    try { await Api.adminDeletePromo(id); Toast.show('Deleted', '', 'info', '🗑'); this._renderTab(); }
+    catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
+  async _notifPanel() {
+    const countData = await Api.notificationCount().catch(() => ({ count: 0 }));
+    return `<div class="admin-head"><h2>🔔 Push Notifications</h2><p>${countData.count} subscribers</p></div>
+      <div style="background:var(--bg-card-2);border:1px solid var(--border);border-radius:var(--radius);padding:16px;">
+        <div style="font-size:.78rem;font-weight:600;margin-bottom:10px;">Send Notification to All Users</div>
+        <div style="display:grid;gap:8px;margin-bottom:8px;">
+          <div><label class="form-lbl">Title</label><input id="notif-title" placeholder="New product added!" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+          <div><label class="form-lbl">Message</label><input id="notif-body" placeholder="Check out our latest listings" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+          <div><label class="form-lbl">Link (optional)</label><input id="notif-url" placeholder="/" style="margin-top:4px;width:100%;box-sizing:border-box;"></div>
+        </div>
+        <button class="btn btn-gold btn-sm" onclick="Admin._sendNotif()">🔔 Send to All Subscribers</button>
+      </div>`;
+  },
+
+  async _sendNotif() {
+    const title = document.getElementById('notif-title')?.value.trim();
+    const body = document.getElementById('notif-body')?.value.trim();
+    const url = document.getElementById('notif-url')?.value.trim() || '/';
+    if (!title || !body) return Toast.show('Error', 'Fill title and message', 'error', '⚠️');
+    try {
+      const res = await Api.broadcastNotification(title, body, url);
+      Toast.show('Sent!', `Delivered to ${res.sent} subscribers`, 'success', '🔔');
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
+  },
+
   async _clearAllOrders() {
     if (!await Confirm.show('This will remove ALL orders and cannot be undone.', { title: 'Clear all orders?', icon: '🗑️', iconColor: 'var(--red)', okText: 'Yes, Clear All', okColor: 'var(--red)', okBorder: 'var(--red)' })) return;
     try { await Api.adminClearOrders(); Toast.show('Cleared', 'All orders removed', 'info', '🗑'); this._renderTab(); } catch (e) { Toast.show('Error', e.message, 'error', '⚠️'); }

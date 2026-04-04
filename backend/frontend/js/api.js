@@ -205,4 +205,27 @@ const Api = {
   async adminWithdrawals() { return this.get('/admin/withdrawals'); },
   async adminUpdateWithdrawal(id, status) { return this.patch('/admin/withdrawals/' + id, { status }); },
   async adminAffiliates() { return this.get('/admin/affiliates'); },
+  // ── Reviews ───────────────────────────────────────────────
+  async getReviews(productId) { return this.get('/reviews/' + productId); },
+  async addReview(productId, rating, comment) { return this.post('/reviews/' + productId, { rating, comment }); },
+
+  // ── Promo ─────────────────────────────────────────────────
+  async validatePromo(code) { return this.get('/promo/validate/' + code); },
+  async adminCreatePromo(data) { return this.post('/promo/admin/create', data); },
+  async adminListPromos() { return this.get('/promo/admin/list'); },
+  async adminDeletePromo(id) { return this.del('/promo/admin/' + id); },
+
+  // ── Notifications ─────────────────────────────────────────
+  async subscribeNotifications(subscription, userId) {
+    return this.post('/notifications/subscribe', { subscription, user_id: userId || 'guest' });
+  },
+  async broadcastNotification(title, body, url) {
+    return this.post('/notifications/broadcast', { title, body, url });
+  },
+  async notificationCount() { return this.get('/notifications/count'); },
+
+  // ── Export ────────────────────────────────────────────────
+  exportOrders(fmt) { window.open(API_BASE + '/admin/export/orders?fmt=' + fmt, '_blank'); },
+  exportWithdrawals(fmt) { window.open(API_BASE + '/admin/export/withdrawals?fmt=' + fmt, '_blank'); },
+
 };
