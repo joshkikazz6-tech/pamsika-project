@@ -142,3 +142,8 @@ async def notify_new_product(product_name: str, product_id: str, db: AsyncSessio
     users = result.scalars().all()
     emails = [u.email for u in users]
     _send_bulk_email(emails, "🆕 New Product on Pa_mSikA!", product_name, url)
+
+
+def _send_email(to_email: str, full_name: str, title: str, body: str, url: str):
+    """Send a single email — used by messages and community modules."""
+    _send_bulk_email([to_email], title, body, url)
