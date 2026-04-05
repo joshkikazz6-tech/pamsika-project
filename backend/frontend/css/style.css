@@ -818,21 +818,21 @@ body.light .glass { background: rgba(240,235,226,.92); }
 }
 .community-post:hover { border-color: var(--border-2); }
 
-/* ── MESSAGES RESPONSIVE ────────────────────────────────────── */
-/* ── MESSAGES LAYOUT ─────────────────────────────────────── */
 
-/* Desktop shell: sidebar + thread side by side */
 /* ═══════════════════════════════════════════════════════════
-   MESSAGES — WhatsApp-style layout
-   Desktop: side-by-side panels
-   Mobile:  full-screen sliding panels (list ← → thread)
+   MESSAGES — WhatsApp-style
+   Desktop: side-by-side panels in a card
+   Mobile : full-screen immersive chat (list ↔ thread)
 ═══════════════════════════════════════════════════════════ */
 
+/* The view wrapper — zero padding so shell can fill edge-to-edge */
 .msg-view {
   padding: 0;
 }
 
-/* ── Shell: the outer container ── */
+/* ──────────────────────────────────────────────
+   DESKTOP shell: normal card layout
+────────────────────────────────────────────── */
 .msg-shell {
   display: grid;
   grid-template-columns: 300px 1fr;
@@ -843,11 +843,10 @@ body.light .glass { background: rgba(240,235,226,.92); }
   min-height: 500px;
   margin: 16px;
 }
-
-/* ── List panel (left) ── */
 .msg-panel-list {
   border-right: 1px solid var(--border);
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   background: var(--bg-card);
   display: flex;
   flex-direction: column;
@@ -857,18 +856,15 @@ body.light .glass { background: rgba(240,235,226,.92); }
   display: flex;
   flex-direction: column;
 }
-
-/* ── Thread panel (right) ── */
 .msg-panel-thread {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: var(--bg-2, var(--bg));
-  /* thread must fill remaining height */
+  background: var(--bg);
   min-height: 0;
 }
 
-/* ── Conversation row ── */
+/* ── Conversation rows ── */
 .msg-conv-row {
   display: flex;
   align-items: center;
@@ -883,17 +879,17 @@ body.light .glass { background: rgba(240,235,226,.92); }
 .msg-conv-row.active { background: var(--gold-dim); border-left: 3px solid var(--gold); padding-left: 11px; }
 .msg-conv-avatar {
   width: 44px; height: 44px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--teal, #128c7e), var(--gold));
+  background: linear-gradient(135deg, #128c7e, #c8a84b);
   display: flex; align-items: center; justify-content: center;
   font-size: .95rem; font-weight: 800; color: #fff;
   flex-shrink: 0; text-transform: uppercase;
 }
-.msg-conv-body   { flex: 1; min-width: 0; }
-.msg-conv-name   { font-size: .84rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-1); }
-.msg-conv-sub    { font-size: .71rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
-.msg-conv-meta   { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
-.msg-conv-time   { font-size: .63rem; color: var(--text-3); }
-.msg-conv-del    { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: .8rem; padding: 2px 4px; border-radius: 4px; opacity: 0; transition: opacity .15s; }
+.msg-conv-body  { flex: 1; min-width: 0; }
+.msg-conv-name  { font-size: .84rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--text-1); }
+.msg-conv-sub   { font-size: .71rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.msg-conv-meta  { display: flex; flex-direction: column; align-items: flex-end; gap: 5px; flex-shrink: 0; }
+.msg-conv-time  { font-size: .63rem; color: var(--text-3); }
+.msg-conv-del   { background: none; border: none; cursor: pointer; color: var(--text-3); font-size: .8rem; padding: 2px 4px; border-radius: 4px; opacity: 0; transition: opacity .15s; }
 .msg-conv-del:hover { color: var(--red); background: rgba(255,60,60,.1); }
 .msg-conv-row:hover .msg-conv-del { opacity: 1; }
 
@@ -907,7 +903,7 @@ body.light .glass { background: rgba(240,235,226,.92); }
 }
 .msg-chat-hdr-av {
   width: 38px; height: 38px; border-radius: 50%;
-  background: linear-gradient(135deg, var(--teal, #128c7e), var(--gold));
+  background: linear-gradient(135deg, #128c7e, #c8a84b);
   display: flex; align-items: center; justify-content: center;
   font-size: .88rem; font-weight: 800; color: #fff; flex-shrink: 0;
 }
@@ -915,7 +911,7 @@ body.light .glass { background: rgba(240,235,226,.92); }
 .msg-chat-hdr-name { font-size: .9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .msg-chat-hdr-sub  { font-size: .68rem; color: var(--text-3); margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
-/* ── Bubbles scroll area ── */
+/* ── Bubble scroll area ── */
 .msg-bubbles {
   flex: 1;
   overflow-y: auto;
@@ -924,30 +920,28 @@ body.light .glass { background: rgba(240,235,226,.92); }
   display: flex;
   flex-direction: column;
   gap: 3px;
-  /* subtle chat wallpaper */
+  min-height: 0;
   background-image: radial-gradient(circle, var(--border) 1px, transparent 1px);
   background-size: 20px 20px;
-  min-height: 0; /* critical for flex scroll */
 }
-.msg-bwrap        { display: flex; margin-bottom: 2px; }
-.msg-bwrap.sent   { justify-content: flex-end; }
-.msg-bwrap.recv   { justify-content: flex-start; }
+.msg-bwrap      { display: flex; margin-bottom: 2px; }
+.msg-bwrap.sent { justify-content: flex-end; }
+.msg-bwrap.recv { justify-content: flex-start; }
 
-/* WhatsApp-style bubbles */
+/* Bubbles — WhatsApp colours */
 .msg-bubble {
   max-width: 72%; padding: 7px 12px 5px;
   border-radius: 16px; font-size: .84rem; line-height: 1.5;
-  word-break: break-word; position: relative;
+  word-break: break-word;
   box-shadow: 0 1px 2px rgba(0,0,0,.15);
 }
 .msg-bwrap.sent .msg-bubble {
-  background: #128c7e; /* WhatsApp green */
+  background: #128c7e;
   color: #fff;
   border-bottom-right-radius: 3px;
 }
-.body.light .msg-bwrap.sent .msg-bubble,
 .light .msg-bwrap.sent .msg-bubble {
-  background: #dcf8c6; /* WhatsApp light green */
+  background: #dcf8c6;
   color: #111;
 }
 .msg-bwrap.recv .msg-bubble {
@@ -957,8 +951,8 @@ body.light .glass { background: rgba(240,235,226,.92); }
   border-bottom-left-radius: 3px;
 }
 .msg-bubble-sender { font-size: .63rem; font-weight: 700; color: var(--gold); display: block; margin-bottom: 2px; }
-.msg-bubble-time   { font-size: .59rem; opacity: .7; display: block; text-align: right; margin-top: 3px; }
-.msg-bwrap.sent .msg-bubble-time { color: rgba(255,255,255,.8); }
+.msg-bubble-time   { font-size: .59rem; display: block; text-align: right; margin-top: 3px; }
+.msg-bwrap.sent .msg-bubble-time { color: rgba(255,255,255,.75); }
 .msg-bwrap.recv .msg-bubble-time { color: var(--text-3); }
 .msg-bubble img    { max-width: 100%; max-height: 180px; border-radius: 8px; margin-top: 5px; display: block; cursor: pointer; }
 .msg-date-div      { text-align: center; font-size: .64rem; color: var(--text-3); padding: 8px 0; }
@@ -968,13 +962,12 @@ body.light .glass { background: rgba(240,235,226,.92); }
 .msg-input-bar {
   display: flex; flex-direction: column; gap: 5px;
   padding: 8px 12px;
-  padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
   background: var(--bg-card);
   border-top: 1px solid var(--border);
   flex-shrink: 0;
 }
-.msg-input-row   { display: flex; gap: 8px; align-items: flex-end; }
-.msg-attach-btn  {
+.msg-input-row  { display: flex; gap: 8px; align-items: flex-end; }
+.msg-attach-btn {
   background: none; border: none; cursor: pointer;
   color: var(--text-3); font-size: 1.25rem; padding: 4px;
   flex-shrink: 0; transition: color .15s; line-height: 1;
@@ -999,7 +992,7 @@ body.light .glass { background: rgba(240,235,226,.92); }
 .msg-send-btn:hover  { background: #075e54; }
 .msg-send-btn:active { transform: scale(.9); }
 
-/* ── Back button — hidden on desktop ── */
+/* Back button — hidden on desktop */
 .msg-back-btn {
   display: none;
   background: none; border: none; cursor: pointer;
@@ -1008,27 +1001,54 @@ body.light .glass { background: rgba(240,235,226,.92); }
   -webkit-tap-highlight-color: transparent;
 }
 
-/* ══════════════════════════════════════════════════════════
-   MOBILE  ≤ 768px  — Full-screen WhatsApp-like behaviour
-══════════════════════════════════════════════════════════ */
+/* ══════════════════════════════════════════════════════
+   MOBILE ≤ 768px
+   Strategy: make the messages view a fixed full-screen
+   overlay that sits between the top navbar and bottom
+   nav. No position:fixed on inner children — just let
+   flexbox fill the fixed container naturally.
+══════════════════════════════════════════════════════ */
 @media (max-width: 768px) {
-  .msg-view { padding: 0; }
 
-  .msg-shell {
-    display: block;          /* stack panels on top of each other */
-    position: fixed;
-    top: var(--nav-h);
-    left: 0; right: 0;
-    /* Bottom edge: above the bottom-nav bar (~58px) + safe area */
-    bottom: calc(58px + env(safe-area-inset-bottom, 0px));
-    margin: 0;
-    border: none;
-    border-radius: 0;
-    height: auto;
+  /* Hide the main scrollable content padding when messages is active */
+  body.msg-active {
     overflow: hidden;
   }
 
-  /* ── List panel: fills the shell, slides left when thread opens ── */
+  /* The view itself becomes a fixed full-screen layer */
+  #view-messages.msg-view {
+    display: block !important; /* overridden by JS show/hide via visibility */
+    position: fixed !important;
+    top: var(--nav-h) !important;
+    left: 0 !important;
+    right: 0 !important;
+    /* Sit above the bottom nav (58px) + safe area */
+    bottom: calc(58px + env(safe-area-inset-bottom, 0px)) !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    z-index: 50;
+    overflow: hidden;
+  }
+
+  /* When the messages view is hidden, don't block interaction */
+  #view-messages.msg-view[style*="display:none"],
+  #view-messages.msg-view[style*="display: none"] {
+    display: none !important;
+  }
+
+  /* Shell fills the fixed view completely */
+  .msg-shell {
+    display: block;
+    position: absolute;
+    inset: 0;
+    margin: 0;
+    border: none;
+    border-radius: 0;
+    height: 100%;
+    overflow: hidden;
+  }
+
+  /* List panel: fills shell, slides out left when thread opens */
   .msg-panel-list {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
@@ -1041,45 +1061,55 @@ body.light .glass { background: rgba(240,235,226,.92); }
     will-change: transform;
   }
 
-  /* ── Thread panel: off-screen right, slides in over list ── */
+  /* Thread panel: starts off-screen right, slides in on top */
   .msg-panel-thread {
     position: absolute;
     top: 0; left: 0; right: 0; bottom: 0;
+    display: flex;
+    flex-direction: column;
     transform: translateX(100%);
     transition: transform .3s cubic-bezier(.4,0,.2,1);
     z-index: 2;
     will-change: transform;
-    display: flex;
-    flex-direction: column;
+    overflow: hidden;
   }
 
-  /* JS adds .thread-open to .msg-shell to trigger slide animation */
-  .msg-shell.thread-open .msg-panel-list  { transform: translateX(-100%); }
+  /* JS adds .thread-open to .msg-shell */
+  .msg-shell.thread-open .msg-panel-list   { transform: translateX(-100%); }
   .msg-shell.thread-open .msg-panel-thread { transform: translateX(0); }
 
-  /* Show back button on mobile */
-  .msg-back-btn { display: flex; align-items: center; }
+  /* Messages thread inner wrapper fills the thread panel */
+  #messages-thread {
+    display: flex !important;
+    flex-direction: column !important;
+    flex: 1 !important;
+    min-height: 0 !important;
+    height: 100% !important;
+  }
 
-  /* Prevent iOS auto-zoom when tapping textarea */
+  /* Bubbles area: must be scrollable and fill remaining space */
+  .msg-bubbles {
+    flex: 1 !important;
+    min-height: 0 !important;
+    overflow-y: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+
+  /* Input bar stays at the bottom of the thread panel */
+  .msg-input-bar {
+    flex-shrink: 0 !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Show the back button */
+  .msg-back-btn { display: flex !important; align-items: center; }
+
+  /* Prevent iOS auto-zoom on textarea focus */
   .msg-textarea { font-size: 16px !important; }
 
-  /* Delete button always visible (no hover on mobile) */
+  /* Delete always visible on mobile (no hover) */
   .msg-conv-del { opacity: 1 !important; }
-
-  /* Bubbles fill remaining space correctly */
-  .msg-bubbles {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
-    -webkit-overflow-scrolling: touch;
-  }
 
   /* Wider bubbles on small screens */
   .msg-bubble { max-width: 82%; }
-
-  /* Input bar: fixed to bottom of thread panel */
-  .msg-input-bar {
-    flex-shrink: 0;
-    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  }
 }

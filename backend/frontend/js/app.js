@@ -1773,13 +1773,15 @@ const Views = {
       const el = document.getElementById('view-' + x);
       if (el) el.style.display = x === v ? 'block' : 'none';
     });
+    // On mobile, messages uses position:fixed — lock body scroll to prevent ghost scrolling
+    document.body.classList.toggle('msg-active', v === 'messages');
     const hero = document.getElementById('hero');
     const hot = document.getElementById('hot-strip');
     const wa = document.getElementById('wa-banner');
     if (hero) hero.style.display = v === 'home' ? 'block' : 'none';
     if (hot) hot.style.display = v === 'home' ? 'flex' : 'none';
     if (wa) wa.style.display = v === 'home' ? 'flex' : 'none';
-    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (v !== 'messages') window.scrollTo({ top: 0, behavior: 'smooth' });
     if (v === 'favorites') this.renderFavs();
     if (v === 'affiliate') this.renderAffiliate();
     if (v === 'account') this.renderAccount();
