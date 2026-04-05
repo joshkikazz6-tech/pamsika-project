@@ -1788,7 +1788,7 @@ const Views = {
   show(v) {
     // Stop polling when leaving community/messages
     if (this.current === 'community' && v !== 'community') Community.stopPolling();
-    if (this.current === 'messages' && v !== 'messages') { Messages.stopPolling(); Messages._clearThread(); document.body.classList.remove('chat-open'); }
+    if (this.current === 'messages' && v !== 'messages') { Messages.stopPolling(); document.body.classList.remove('chat-open'); }
     this.current = v;
     ['home', 'favorites', 'affiliate', 'account', 'community', 'messages'].forEach(x => {
       const el = document.getElementById('view-' + x);

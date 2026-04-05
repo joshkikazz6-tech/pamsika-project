@@ -821,8 +821,9 @@ body.light .glass { background: rgba(240,235,226,.92); }
 /* ── MESSAGES — WHATSAPP STYLE ───────────────────────────────── */
 .msg-view-wrap {
   padding: 0;
-  /* Full height minus top nav and bottom mobile nav */
-  height: calc(100vh - var(--nav-h) - 1px);
+  /* Desktop: fixed height so the chat panel fills the viewport neatly */
+  height: calc(100vh - var(--nav-h) - 32px);
+  min-height: 500px;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -832,7 +833,7 @@ body.light .glass { background: rgba(240,235,226,.92); }
   flex: 1;
   overflow: hidden;
   background: var(--bg-2);
-  height: 100%;
+  min-height: 0; /* critical: lets flex children shrink below content size */
 }
 
 /* ── LEFT PANEL: chat list ── */
@@ -1056,6 +1057,8 @@ body.light .glass { background: rgba(240,235,226,.92); }
 /* ── MOBILE ── */
 @media (max-width: 680px) {
   /* Take over the full screen — no page scroll, no bottom padding fighting us */
+  /* NOTE: display is NOT set here — views.js controls display:block/none via inline style.
+     We only override layout WHEN the element is already visible (display:block set by JS). */
   #view-messages {
     position: fixed;
     inset: 0;
@@ -1063,8 +1066,12 @@ body.light .glass { background: rgba(240,235,226,.92); }
     bottom: 0;
     z-index: 50;
     padding: 0 !important;
-    display: flex;
     flex-direction: column;
+  }
+  /* Only apply flex layout when the view is actually shown by JS */
+  #view-messages[style*="block"],
+  #view-messages[style*="flex"] {
+    display: flex !important;
   }
 
   .msg-view-wrap {
