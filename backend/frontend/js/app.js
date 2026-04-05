@@ -426,48 +426,68 @@ const Messages = {
       if (!el) return;
       if (!silent) this.renderList();
 
-      const msgBubbles = conv.messages.map(m => {
-        const isAdmin = m.is_admin;
-        const mediaHtml = (m.media_urls || []).map(url =>
-          `<img src="${U.esc(url)}" alt="attachment" style="max-width:100%;max-height:220px;border-radius:6px;margin-top:6px;display:block;cursor:pointer;" onclick="window.open('${U.esc(url)}','_blank')" onerror="this.style.display='none'">`
-        ).join('');
-        return `
-          <div style="display:flex;${isAdmin ? 'justify-content:flex-start' : 'justify-content:flex-end'};">
-            <div style="max-width:75%;background:${isAdmin ? 'var(--bg-card-2)' : 'var(--gold-dim)'};border:1px solid ${isAdmin ? 'var(--border)' : 'var(--gold)'};border-radius:var(--radius-sm);padding:10px 14px;">
-              <div style="font-size:.66rem;color:var(--text-3);margin-bottom:4px;">${U.esc(m.sender)} · ${new Date(m.created_at).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}</div>
-              ${m.content ? `<div style="font-size:.82rem;line-height:1.55;word-break:break-word;">${U.esc(m.content)}</div>` : ''}
+      // Build bubbles with date dividers
+      const msgBubbles = (() => {
+        let lastDate = '';
+        const isSelf = m => Auth.user?.is_admin ? m.is_admin : !m.is_admin;
+        return conv.messages.map(m => {
+          const mDate = new Date(m.created_at);
+          const dateStr = mDate.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+          const todayStr = new Date().toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+          const yestStr  = new Date(Date.now()-86400000).toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
+          const label    = dateStr === todayStr ? 'Today' : dateStr === yestStr ? 'Yesterday' : mDate.toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'});
+          const divider  = dateStr !== lastDate ? `<div class="msg-date-divider"><span>${label}</span></div>` : '';
+          lastDate = dateStr;
+          const side = isSelf(m) ? 'sent' : 'received';
+          const timeStr = mDate.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+          const mediaHtml = (m.media_urls||[]).map(url =>
+            `<img src="${U.esc(url)}" alt="img" onclick="window.open('${U.esc(url)}','_blank')" onerror="this.style.display='none'">`
+          ).join('');
+          const showSender = !isSelf(m) && Auth.user?.is_admin;
+          return `${divider}<div class="msg-bubble-wrap ${side}">
+            <div class="msg-bubble">
+              ${showSender ? `<span class="msg-bubble-sender">${U.esc(m.sender)}</span>` : ''}
+              ${m.content ? `<span class="msg-bubble-text">${U.esc(m.content)}</span>` : ''}
               ${mediaHtml}
+              <span class="msg-bubble-time">${timeStr}</span>
             </div>
           </div>`;
-      }).join('');
+        }).join('');
+      })();
 
       // Mobile: slide to thread panel
       const panels = document.querySelector('.msg-panels');
       if (panels) panels.classList.add('thread-open');
 
+      const headerAvatar = (Auth.user?.is_admin ? conv.user_name : 'P').slice(0,1).toUpperCase();
+      const headerName   = Auth.user?.is_admin ? U.esc(conv.user_name) : 'Pa_mSikA Support';
+      const headerSub    = Auth.user?.is_admin
+        ? `${U.esc(conv.user_email)} · ${U.esc(conv.subject)}`
+        : `${U.esc(conv.subject)} · 🔒 encrypted`;
+
       el.innerHTML = `
-        <div style="padding:11px 14px;border-bottom:1px solid var(--border);background:var(--bg-card);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
-          <button onclick="Messages._backToList()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-size:1.1rem;padding:0 6px 0 0;flex-shrink:0;" title="Back">‹</button>
-          <div style="flex:1;min-width:0;">
-            <div style="font-size:.85rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
-            ${Auth.user?.is_admin ? `<div style="font-size:.7rem;color:var(--text-3);margin-top:1px;">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : `<div style="font-size:.68rem;color:var(--text-3);margin-top:1px;">Pa_mSikA Support · 🔒 encrypted</div>`}
+        <div class="msg-chat-header">
+          <button onclick="Messages._backToList()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-size:1.5rem;padding:0 4px 0 0;flex-shrink:0;line-height:1;" title="Back">‹</button>
+          <div class="msg-chat-header-avatar">${headerAvatar}</div>
+          <div class="msg-chat-header-info">
+            <div class="msg-chat-header-name">${headerName}</div>
+            <div class="msg-chat-header-sub">${headerSub}</div>
           </div>
-          <button onclick="Messages.deleteConversation('${conv.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:.85rem;padding:4px 6px;border-radius:var(--radius-sm);" title="Delete chat">🗑</button>
+          <button onclick="Messages.deleteConversation('${conv.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:1rem;padding:6px;border-radius:50%;transition:background .15s;" onmouseover="this.style.background='rgba(255,60,60,.12)'" onmouseout="this.style.background=''" title="Delete chat">🗑</button>
         </div>
-        <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
-          ${msgBubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:30px;">No messages yet</div>'}
+        <div class="msg-bubbles" id="msg-thread-body">
+          ${msgBubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:40px 20px;"><div style="font-size:2rem;margin-bottom:8px;">👋</div>Say hello!</div>'}
         </div>
-        <div style="padding:10px 14px;border-top:1px solid var(--border);display:flex;flex-direction:column;gap:8px;">
+        <div class="msg-input-bar">
           <div id="msg-media-preview" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
-          <div style="display:flex;gap:8px;align-items:center;">
-            <label title="Attach image" style="cursor:pointer;color:var(--text-3);font-size:1.1rem;flex-shrink:0;">
+          <div class="msg-input-row">
+            <label class="msg-attach-btn" title="Attach image">
               📎<input type="file" accept="image/*,image/gif" multiple style="display:none;" onchange="Messages._stageMedia(this,'${conv.id}')">
             </label>
-            <textarea id="msg-reply-input" placeholder="Type a message… (Enter to send)" rows="1"
-              style="flex:1;font-size:.82rem;resize:none;padding:8px 10px;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--bg-card);color:var(--text-1);font-family:inherit;line-height:1.4;"
+            <textarea id="msg-reply-input" class="msg-textarea" placeholder="Message…" rows="1"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Messages.sendReply('${conv.id}')}"
               oninput="this.style.height='auto';this.style.height=Math.min(this.scrollHeight,120)+'px'"></textarea>
-            <button class="btn btn-gold btn-sm" onclick="Messages.sendReply('${conv.id}')" style="flex-shrink:0;">Send</button>
+            <button class="msg-send-btn" onclick="Messages.sendReply('${conv.id}')" title="Send">➤</button>
           </div>
         </div>`;
 
@@ -790,7 +810,11 @@ const Messages = {
     const panels = document.querySelector('.msg-panels');
     if (panels) panels.classList.remove('thread-open');
     const el = document.getElementById('messages-thread');
-    if (el) el.innerHTML = '<div class="msg-thread-inner" style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;color:var(--text-3);text-align:center;"><div><div style="font-size:2.4rem;margin-bottom:10px;">💬</div><div style="font-size:.85rem;font-weight:600;margin-bottom:6px;">Your messages</div><div style="font-size:.74rem;">Select a conversation or tap ✏️ New</div></div></div>';
+    if (el) el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-3);text-align:center;padding:40px;gap:10px;">
+      <div style="width:72px;height:72px;border-radius:50%;background:var(--gold-dim);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:2rem;">💬</div>
+      <div style="font-size:.95rem;font-weight:700;color:var(--text-2);">Your conversations</div>
+      <div style="font-size:.76rem;max-width:220px;line-height:1.6;">Select a chat from the left, or tap <strong style="color:var(--gold);">✏️ New</strong> to start one</div>
+    </div>`;
   },
 
   _backToList() {
