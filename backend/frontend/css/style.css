@@ -1055,24 +1055,86 @@ body.light .glass { background: rgba(240,235,226,.92); }
 
 /* ── MOBILE ── */
 @media (max-width: 680px) {
-  .msg-view-wrap {
-    height: calc(100vh - var(--nav-h) - 56px);
+  /* Take over the full screen — no page scroll, no bottom padding fighting us */
+  #view-messages {
+    position: fixed;
+    inset: 0;
+    top: var(--nav-h);
+    bottom: 0;
+    z-index: 50;
+    padding: 0 !important;
+    display: flex;
+    flex-direction: column;
   }
-  .msg-panels { display: block; position: relative; overflow: hidden; }
+
+  .msg-view-wrap {
+    flex: 1;
+    height: 100%;
+    /* Use dvh so the view shrinks when the keyboard opens, keeping input visible */
+    max-height: calc(100dvh - var(--nav-h));
+  }
+
+  .msg-panels {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    flex: 1;
+    height: 100%;
+  }
+
   .msg-panel-list {
     position: absolute; inset: 0; width: 100%;
     transition: transform .28s cubic-bezier(.4,0,.2,1);
     z-index: 2;
+    /* account for bottom nav on list panel */
+    padding-bottom: 56px;
   }
+
   .msg-panel-thread {
     position: absolute; inset: 0;
     transform: translateX(100%);
     transition: transform .28s cubic-bezier(.4,0,.2,1);
     z-index: 3;
+    display: flex;
+    flex-direction: column;
+    /* no bottom padding — thread fills full height, input bar is inside */
   }
+
+  /* Slide animations */
   .msg-panels.thread-open .msg-panel-list   { transform: translateX(-100%); }
   .msg-panels.thread-open .msg-panel-thread { transform: translateX(0); }
+
+  /* Hide bottom nav when thread is open — just like WhatsApp */
+  body.chat-open #bottom-nav { display: none !important; }
+
+  /* Thread inner must fill the panel and let bubbles scroll */
+  .msg-thread-inner {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* Bubbles area scrolls, input stays pinned at bottom */
+  .msg-bubbles {
+    flex: 1;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+  }
+
+  /* Input bar — always visible above keyboard */
+  .msg-input-bar {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom));
+  }
+
+  .msg-textarea { font-size: 16px; /* prevent iOS zoom */ }
+
   .msg-conv-del   { opacity: 1 !important; }
-  .msg-bubble     { max-width: 85%; }
+  .msg-bubble     { max-width: 88%; font-size: .82rem; }
   .msg-chat-header { padding: 8px 12px; }
+  .msg-conv-avatar { width: 40px; height: 40px; font-size: .9rem; }
+  .msg-conv-row { padding: 11px 14px; }
 }

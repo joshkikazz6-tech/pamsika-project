@@ -455,9 +455,10 @@ const Messages = {
         }).join('');
       })();
 
-      // Mobile: slide to thread panel
+      // Mobile: slide to thread panel + hide bottom nav like WhatsApp
       const panels = document.querySelector('.msg-panels');
       if (panels) panels.classList.add('thread-open');
+      document.body.classList.add('chat-open');
 
       const headerAvatar = (Auth.user?.is_admin ? conv.user_name : 'P').slice(0,1).toUpperCase();
       const headerName   = Auth.user?.is_admin ? U.esc(conv.user_name) : 'Pa_mSikA Support';
@@ -809,6 +810,7 @@ const Messages = {
     this._activeConv = null;
     const panels = document.querySelector('.msg-panels');
     if (panels) panels.classList.remove('thread-open');
+    document.body.classList.remove('chat-open');
     const el = document.getElementById('messages-thread');
     if (el) el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-3);text-align:center;padding:40px;gap:10px;">
       <div style="width:72px;height:72px;border-radius:50%;background:var(--gold-dim);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:2rem;">💬</div>
@@ -820,6 +822,7 @@ const Messages = {
   _backToList() {
     const panels = document.querySelector('.msg-panels');
     if (panels) panels.classList.remove('thread-open');
+    document.body.classList.remove('chat-open');
     this._activeConv = null;
   },
 
@@ -1785,7 +1788,7 @@ const Views = {
   show(v) {
     // Stop polling when leaving community/messages
     if (this.current === 'community' && v !== 'community') Community.stopPolling();
-    if (this.current === 'messages' && v !== 'messages') Messages.stopPolling();
+    if (this.current === 'messages' && v !== 'messages') { Messages.stopPolling(); Messages._clearThread(); document.body.classList.remove('chat-open'); }
     this.current = v;
     ['home', 'favorites', 'affiliate', 'account', 'community', 'messages'].forEach(x => {
       const el = document.getElementById('view-' + x);
