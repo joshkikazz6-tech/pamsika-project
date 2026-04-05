@@ -3,7 +3,7 @@
  * Adds push notification support
  */
 
-const CACHE_NAME = 'pamsika-static-v4';
+const CACHE_NAME = 'pamsika-static-v5';
 const JS_FILES = ['/js/api.js', '/js/app.js'];
 const STATIC_ASSETS = ['/', '/index.html', '/css/style.css', '/js/api.js', '/js/app.js', '/manifest.json'];
 
