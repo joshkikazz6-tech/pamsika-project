@@ -366,37 +366,49 @@ const Messages = {
     const el = document.getElementById('messages-list');
     if (!el) return;
 
-    // Header with "New Message" button
     const newBtn = Auth.user?.is_admin
-      ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 10px;font-size:.72rem;cursor:pointer;white-space:nowrap;">✏️ New</button>`
-      : `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:6px 12px;font-size:.75rem;cursor:pointer;font-weight:600;white-space:nowrap;">✏️ New Message</button>`;
+      ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 11px;font-size:.73rem;cursor:pointer;font-weight:600;">✏️ New</button>`
+      : `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:6px 13px;font-size:.75rem;cursor:pointer;font-weight:700;">✏️ New</button>`;
 
-    const header = `<div style="padding:10px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card-2);">
-      <span style="font-size:.75rem;font-weight:600;color:var(--text-2);">Conversations</span>
+    const header = `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card);position:sticky;top:0;z-index:1;">
+      <span style="font-size:.78rem;font-weight:700;color:var(--text-1);letter-spacing:.03em;">Messages</span>
       ${Auth.user ? newBtn : ''}
     </div>`;
 
     if (!this._convs.length) {
-      el.innerHTML = header + `<div style="text-align:center;padding:30px 16px;color:var(--text-3);font-size:.8rem;">
-        <div style="font-size:1.8rem;margin-bottom:8px;">💬</div>
-        <div style="margin-bottom:12px;">No conversations yet.</div>
-        ${Auth.user && !Auth.user.is_admin ? `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:8px 18px;font-size:.8rem;cursor:pointer;font-weight:600;">✏️ Message Pa_mSikA</button>` : ''}
+      el.innerHTML = header + `<div style="text-align:center;padding:40px 20px;color:var(--text-3);">
+        <div style="font-size:2.2rem;margin-bottom:10px;">💬</div>
+        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px;">No conversations yet</div>
+        <div style="font-size:.74rem;margin-bottom:16px;">Start a chat with Pa_mSikA support</div>
+        ${Auth.user && !Auth.user.is_admin ? `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:9px 20px;font-size:.8rem;cursor:pointer;font-weight:700;">✏️ New Message</button>` : ''}
       </div>`;
       return;
     }
 
-    const rows = this._convs.map(c => `
-      <div onclick="Messages.openConversation('${c.id}')"
-           style="padding:13px 16px;border-bottom:1px solid var(--border);cursor:pointer;transition:background .12s;background:${this._activeConv === c.id ? 'var(--gold-dim)' : ''};"
-           onmouseover="this.style.background='var(--bg-card-2)'"
-           onmouseout="this.style.background='${this._activeConv === c.id ? 'var(--gold-dim)' : ''}'">
-        <div style="display:flex;justify-content:space-between;align-items:center;">
-          <div style="font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}</div>
-          ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:50%;min-width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:.62rem;font-weight:700;padding:0 3px;">${c.unread}</span>` : ''}
+    const rows = this._convs.map(c => {
+      const initials = (Auth.user?.is_admin ? c.user_name : 'P').slice(0,1).toUpperCase();
+      const timeStr = (() => {
+        const d = new Date(c.updated_at), now = new Date();
+        const diff = now - d;
+        if (diff < 60000) return 'now';
+        if (diff < 3600000) return Math.floor(diff/60000) + 'm';
+        if (diff < 86400000) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        return d.toLocaleDateString([],{day:'numeric',month:'short'});
+      })();
+      return `<div class="msg-conv-row${this._activeConv === c.id ? ' active' : ''}" onclick="Messages.openConversation('${c.id}')">
+        <div class="msg-conv-avatar">${initials}</div>
+        <div class="msg-conv-body">
+          <div class="msg-conv-name">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}
+            ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:10px;font-size:.58rem;font-weight:700;padding:1px 6px;margin-left:5px;">${c.unread}</span>` : ''}
+          </div>
+          <div class="msg-conv-sub">${U.esc(c.subject)}${c.order_ref ? ' · #'+c.order_ref : ''}</div>
         </div>
-        <div style="font-size:.7rem;color:var(--text-3);margin-top:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(c.subject)}${c.order_ref ? ` · #${c.order_ref}` : ''}</div>
-        <div style="font-size:.65rem;color:var(--text-3);margin-top:2px;">${new Date(c.updated_at).toLocaleDateString()}</div>
-      </div>`).join('');
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
+          <span class="msg-conv-time">${timeStr}</span>
+          <button class="msg-conv-del" onclick="event.stopPropagation();Messages.deleteConversation('${c.id}')" title="Delete chat">🗑</button>
+        </div>
+      </div>`;
+    }).join('');
 
     el.innerHTML = header + rows;
   },
@@ -429,13 +441,18 @@ const Messages = {
           </div>`;
       }).join('');
 
+      // Mobile: slide to thread panel
+      const panels = document.querySelector('.msg-panels');
+      if (panels) panels.classList.add('thread-open');
+
       el.innerHTML = `
-        <div style="padding:13px 16px;border-bottom:1px solid var(--border);background:var(--bg-card-2);display:flex;align-items:center;gap:10px;">
+        <div style="padding:11px 14px;border-bottom:1px solid var(--border);background:var(--bg-card);display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:1;">
+          <button onclick="Messages._backToList()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-size:1.1rem;padding:0 6px 0 0;flex-shrink:0;" title="Back">‹</button>
           <div style="flex:1;min-width:0;">
-            <div style="font-size:.85rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
-            ${Auth.user?.is_admin ? `<div style="font-size:.7rem;color:var(--text-3);">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : ''}
+            <div style="font-size:.85rem;font-weight:700;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${U.esc(conv.subject)}${conv.order_ref ? ` <span style="color:var(--gold);">#${conv.order_ref}</span>` : ''}</div>
+            ${Auth.user?.is_admin ? `<div style="font-size:.7rem;color:var(--text-3);margin-top:1px;">${U.esc(conv.user_name)} · ${U.esc(conv.user_email)}</div>` : `<div style="font-size:.68rem;color:var(--text-3);margin-top:1px;">Pa_mSikA Support · 🔒 encrypted</div>`}
           </div>
-          <div style="font-size:.65rem;color:var(--text-3);">🔒 E2E encrypted</div>
+          <button onclick="Messages.deleteConversation('${conv.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:.85rem;padding:4px 6px;border-radius:var(--radius-sm);" title="Delete chat">🗑</button>
         </div>
         <div id="msg-thread-body" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:10px;">
           ${msgBubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:30px;">No messages yet</div>'}
@@ -770,8 +787,30 @@ const Messages = {
 
   _clearThread() {
     this._activeConv = null;
+    const panels = document.querySelector('.msg-panels');
+    if (panels) panels.classList.remove('thread-open');
     const el = document.getElementById('messages-thread');
-    if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;color:var(--text-3);font-size:.82rem;text-align:center;"><div><div style="font-size:2rem;margin-bottom:8px;">💬</div>Select a conversation or tap ✏️ New</div></div>';
+    if (el) el.innerHTML = '<div class="msg-thread-inner" style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;color:var(--text-3);text-align:center;"><div><div style="font-size:2.4rem;margin-bottom:10px;">💬</div><div style="font-size:.85rem;font-weight:600;margin-bottom:6px;">Your messages</div><div style="font-size:.74rem;">Select a conversation or tap ✏️ New</div></div></div>';
+  },
+
+  _backToList() {
+    const panels = document.querySelector('.msg-panels');
+    if (panels) panels.classList.remove('thread-open');
+    this._activeConv = null;
+  },
+
+  async deleteConversation(convId) {
+    const ok = await Confirm.show('Delete this conversation?', {
+      title: 'Delete Chat', icon: '🗑', okText: 'Delete', okColor: 'var(--red)', okBorder: 'var(--red)'
+    });
+    if (!ok) return;
+    try {
+      await Api.deleteConversation(convId);
+      this._convs = this._convs.filter(c => c.id !== convId);
+      if (this._activeConv === convId) this._clearThread();
+      this.renderList();
+      Toast.show('Deleted', 'Conversation removed', 'success', '🗑');
+    } catch(e) { Toast.show('Error', e.message, 'error', '⚠️'); }
   },
 };
 

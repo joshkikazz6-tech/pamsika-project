@@ -203,6 +203,22 @@ async def get_conversation(conversation_id: str, db: AsyncSession = Depends(get_
     return _serialize_conv(conv, current_user.id, is_admin=current_user.is_admin)
 
 
+@router.delete("/{conversation_id}")
+async def delete_conversation(conversation_id: str, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
+    result = await db.execute(
+        select(Conversation).where(Conversation.id == conversation_id)
+    )
+    conv = result.scalar_one_or_none()
+    if not conv:
+        raise HTTPException(status_code=404, detail="Conversation not found")
+    # Users can only delete their own; admins can delete any
+    if str(conv.user_id) != str(current_user.id) and not current_user.is_admin:
+        raise HTTPException(status_code=403, detail="Not allowed")
+    await db.delete(conv)
+    await db.flush()
+    return {"detail": "Deleted"}
+
+
 @router.post("/{conversation_id}/reply")
 async def reply(conversation_id: str, payload: dict, db: AsyncSession = Depends(get_db), current_user: User = Depends(get_current_user)):
     content = _sanitize_text(payload.get("content") or "")

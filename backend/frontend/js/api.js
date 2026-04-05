@@ -216,6 +216,7 @@ const Api = {
 
   // ── Messages ──────────────────────────────────────────────
   async myConversations() { return this.get('/messages/my'); },
+  async deleteConversation(convId) { return this.del('/messages/' + convId); },
   async startConversation(orderId, subject, message, mediaUrls) { return this.post('/messages/start', { order_id: orderId, subject, message, media_urls: mediaUrls || [] }); },
   async getConversation(id) { return this.get('/messages/' + id); },
   async replyMessage(convId, content, mediaUrls) { return this.post('/messages/' + convId + '/reply', { content, media_urls: mediaUrls || [] }); },

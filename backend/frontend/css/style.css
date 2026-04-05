@@ -818,8 +818,106 @@ body.light .glass { background: rgba(240,235,226,.92); }
 }
 .community-post:hover { border-color: var(--border-2); }
 
-/* ── MESSAGES RESPONSIVE ────────────────────────────────────── */
-@media (max-width: 600px) {
-  #view-messages > div > div { grid-template-columns: 1fr !important; }
-  #messages-list { border-right: none !important; border-bottom: 1px solid var(--border); max-height: 200px; }
+/* ── MESSAGES LAYOUT ────────────────────────────────────────── */
+.msg-view-wrap {
+  padding: 0;
+  height: calc(100vh - var(--nav-h) - 70px);
+  display: flex;
+  flex-direction: column;
+}
+.msg-panels {
+  display: grid;
+  grid-template-columns: 300px 1fr;
+  flex: 1;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  height: 100%;
+}
+.msg-panel-list {
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  background: var(--bg-card);
+  display: flex;
+  flex-direction: column;
+}
+.msg-panel-thread {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-2);
+}
+.msg-thread-inner {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+/* conversation row */
+.msg-conv-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background .12s;
+  position: relative;
+}
+.msg-conv-row:hover { background: var(--bg-card-2); }
+.msg-conv-row.active { background: var(--gold-dim); }
+.msg-conv-avatar {
+  width: 38px; height: 38px; border-radius: 50%;
+  background: var(--gold-dim);
+  border: 1.5px solid var(--gold);
+  display: flex; align-items: center; justify-content: center;
+  font-size: .85rem; font-weight: 700; color: var(--gold);
+  flex-shrink: 0;
+}
+.msg-conv-body { flex: 1; min-width: 0; }
+.msg-conv-name { font-size: .8rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.msg-conv-sub  { font-size: .7rem; color: var(--text-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+.msg-conv-time { font-size: .62rem; color: var(--text-3); white-space: nowrap; }
+.msg-conv-del {
+  opacity: 0; transition: opacity .15s;
+  background: none; border: none; cursor: pointer;
+  color: var(--text-3); font-size: .8rem; padding: 4px 6px;
+  border-radius: var(--radius-sm);
+}
+.msg-conv-del:hover { color: var(--red); background: rgba(255,60,60,.1); }
+.msg-conv-row:hover .msg-conv-del { opacity: 1; }
+
+/* Mobile: full-screen panels that slide */
+@media (max-width: 680px) {
+  .msg-view-wrap {
+    height: calc(100vh - var(--nav-h) - 64px);
+    padding: 0;
+  }
+  .msg-panels {
+    display: block;
+    position: relative;
+    overflow: hidden;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+    border-top: none;
+  }
+  .msg-panel-list {
+    position: absolute; inset: 0;
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    z-index: 2;
+    border-right: none;
+  }
+  .msg-panel-thread {
+    position: absolute; inset: 0;
+    transform: translateX(100%);
+    transition: transform .25s cubic-bezier(.4,0,.2,1);
+    z-index: 3;
+  }
+  /* when a conv is open on mobile, slide thread in and list out */
+  .msg-panels.thread-open .msg-panel-list  { transform: translateX(-100%); }
+  .msg-panels.thread-open .msg-panel-thread { transform: translateX(0); }
+  /* always show delete btn on mobile (no hover) */
+  .msg-conv-del { opacity: 1 !important; }
 }
