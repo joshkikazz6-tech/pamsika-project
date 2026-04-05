@@ -184,17 +184,12 @@ const Community = {
       el.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-3);"><div style="font-size:2rem;margin-bottom:8px;">📢</div><div>No posts yet. Check back soon!</div></div>';
       return;
     }
-    // Save any in-progress comment text before re-rendering so polling doesn't wipe it
-    const savedDrafts = {};
-    el.querySelectorAll('input[id^="cmt-input-"]').forEach(inp => {
-      if (inp.value) savedDrafts[inp.id] = inp.value;
-    });
+    // Save in-progress comment drafts before wiping DOM
+    const drafts = {};
+    el.querySelectorAll('input[id^="cmt-input-"]').forEach(inp => { if (inp.value) drafts[inp.id] = inp.value; });
     el.innerHTML = this._posts.map(p => this._renderPost(p)).join('');
-    // Restore saved drafts after render
-    Object.entries(savedDrafts).forEach(([id, val]) => {
-      const inp = document.getElementById(id);
-      if (inp) { inp.value = val; inp.focus(); }
-    });
+    // Restore drafts after render
+    Object.entries(drafts).forEach(([id, val]) => { const inp = document.getElementById(id); if (inp) inp.value = val; });
   },
 
   _renderPost(p) {
@@ -367,45 +362,44 @@ const Messages = {
     if (!el) return;
 
     const newBtn = Auth.user?.is_admin
-      ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 11px;font-size:.73rem;cursor:pointer;font-weight:600;">✏️ New</button>`
-      : `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:6px 13px;font-size:.75rem;cursor:pointer;font-weight:700;">✏️ New</button>`;
+      ? `<button onclick="Messages.showAdminCompose()" style="background:none;border:1.5px solid var(--gold);color:var(--gold);border-radius:var(--radius-sm);padding:5px 12px;font-size:.73rem;cursor:pointer;font-weight:600;">✏️ New</button>`
+      : `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:5px 12px;font-size:.73rem;cursor:pointer;font-weight:700;">✏️ New</button>`;
 
-    const header = `<div style="padding:12px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card);position:sticky;top:0;z-index:1;">
-      <span style="font-size:.78rem;font-weight:700;color:var(--text-1);letter-spacing:.03em;">Messages</span>
+    const header = `<div style="padding:11px 14px;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;background:var(--bg-card);position:sticky;top:0;z-index:1;">
+      <span style="font-size:.78rem;font-weight:700;color:var(--text-1);">Messages</span>
       ${Auth.user ? newBtn : ''}
     </div>`;
 
     if (!this._convs.length) {
-      el.innerHTML = header + `<div style="text-align:center;padding:40px 20px;color:var(--text-3);">
-        <div style="font-size:2.2rem;margin-bottom:10px;">💬</div>
-        <div style="font-size:.82rem;font-weight:600;margin-bottom:6px;">No conversations yet</div>
-        <div style="font-size:.74rem;margin-bottom:16px;">Start a chat with Pa_mSikA support</div>
-        ${Auth.user && !Auth.user.is_admin ? `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:9px 20px;font-size:.8rem;cursor:pointer;font-weight:700;">✏️ New Message</button>` : ''}
+      el.innerHTML = header + `<div style="text-align:center;padding:36px 20px;color:var(--text-3);">
+        <div style="font-size:2rem;margin-bottom:8px;">💬</div>
+        <div style="font-size:.8rem;font-weight:600;margin-bottom:4px;">No conversations yet</div>
+        <div style="font-size:.72rem;margin-bottom:14px;">Start a chat with Pa_mSikA</div>
+        ${Auth.user && !Auth.user.is_admin ? `<button onclick="Messages.showUserCompose()" style="background:var(--gold);border:none;color:#000;border-radius:var(--radius-sm);padding:8px 18px;font-size:.78rem;cursor:pointer;font-weight:700;">✏️ New Message</button>` : ''}
       </div>`;
       return;
     }
 
+    const _time = d => {
+      const diff = Date.now() - new Date(d);
+      if (diff < 60000) return 'now';
+      if (diff < 3600000) return Math.floor(diff/60000) + 'm';
+      if (diff < 86400000) return new Date(d).toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+      return new Date(d).toLocaleDateString([],{day:'numeric',month:'short'});
+    };
+
     const rows = this._convs.map(c => {
-      const initials = (Auth.user?.is_admin ? c.user_name : 'P').slice(0,1).toUpperCase();
-      const timeStr = (() => {
-        const d = new Date(c.updated_at), now = new Date();
-        const diff = now - d;
-        if (diff < 60000) return 'now';
-        if (diff < 3600000) return Math.floor(diff/60000) + 'm';
-        if (diff < 86400000) return d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-        return d.toLocaleDateString([],{day:'numeric',month:'short'});
-      })();
+      const name = Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support';
+      const init = name.slice(0,1).toUpperCase();
       return `<div class="msg-conv-row${this._activeConv === c.id ? ' active' : ''}" onclick="Messages.openConversation('${c.id}')">
-        <div class="msg-conv-avatar">${initials}</div>
+        <div class="msg-conv-avatar">${init}</div>
         <div class="msg-conv-body">
-          <div class="msg-conv-name">${U.esc(Auth.user?.is_admin ? c.user_name : 'Pa_mSikA Support')}
-            ${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:10px;font-size:.58rem;font-weight:700;padding:1px 6px;margin-left:5px;">${c.unread}</span>` : ''}
-          </div>
+          <div class="msg-conv-name">${U.esc(name)}${c.unread > 0 ? `<span style="background:var(--gold);color:#000;border-radius:10px;font-size:.58rem;font-weight:700;padding:1px 6px;margin-left:6px;">${c.unread}</span>` : ''}</div>
           <div class="msg-conv-sub">${U.esc(c.subject)}${c.order_ref ? ' · #'+c.order_ref : ''}</div>
         </div>
-        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:5px;flex-shrink:0;">
-          <span class="msg-conv-time">${timeStr}</span>
-          <button class="msg-conv-del" onclick="event.stopPropagation();Messages.deleteConversation('${c.id}')" title="Delete chat">🗑</button>
+        <div class="msg-conv-meta">
+          <span class="msg-conv-time">${_time(c.updated_at)}</span>
+          <button class="msg-conv-del" onclick="event.stopPropagation();Messages.deleteConversation('${c.id}')" title="Delete">🗑</button>
         </div>
       </div>`;
     }).join('');
@@ -417,8 +411,9 @@ const Messages = {
 
   async openConversation(convId, silent = false) {
     this._activeConv = convId;
-    // Save any in-progress reply text so polling doesn't wipe it
-    const draftText = document.getElementById('msg-reply-input')?.value || '';
+    // Preserve in-progress draft & staged media before any re-render
+    const draft = document.getElementById('msg-reply-input')?.value || '';
+    const media = silent ? [...this._replyMedia] : [];
     if (!silent) this._replyMedia = [];
     try {
       const conv = await Api.getConversation(convId);
@@ -426,64 +421,60 @@ const Messages = {
       if (!el) return;
       if (!silent) this.renderList();
 
-      // Build bubbles with date dividers
-      const msgBubbles = (() => {
-        let lastDate = '';
-        const isSelf = m => Auth.user?.is_admin ? m.is_admin : !m.is_admin;
-        return conv.messages.map(m => {
-          const mDate = new Date(m.created_at);
-          const dateStr = mDate.toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-          const todayStr = new Date().toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-          const yestStr  = new Date(Date.now()-86400000).toLocaleDateString([],{weekday:'long',day:'numeric',month:'long',year:'numeric'});
-          const label    = dateStr === todayStr ? 'Today' : dateStr === yestStr ? 'Yesterday' : mDate.toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'});
-          const divider  = dateStr !== lastDate ? `<div class="msg-date-divider"><span>${label}</span></div>` : '';
-          lastDate = dateStr;
-          const side = isSelf(m) ? 'sent' : 'received';
-          const timeStr = mDate.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
-          const mediaHtml = (m.media_urls||[]).map(url =>
-            `<img src="${U.esc(url)}" alt="img" onclick="window.open('${U.esc(url)}','_blank')" onerror="this.style.display='none'">`
-          ).join('');
-          const showSender = !isSelf(m) && Auth.user?.is_admin;
-          return `${divider}<div class="msg-bubble-wrap ${side}">
-            <div class="msg-bubble">
-              ${showSender ? `<span class="msg-bubble-sender">${U.esc(m.sender)}</span>` : ''}
-              ${m.content ? `<span class="msg-bubble-text">${U.esc(m.content)}</span>` : ''}
-              ${mediaHtml}
-              <span class="msg-bubble-time">${timeStr}</span>
-            </div>
-          </div>`;
-        }).join('');
-      })();
+      // Build message bubbles with date dividers
+      const isMine = m => Auth.user?.is_admin ? m.is_admin : !m.is_admin;
+      let lastDate = '';
+      const bubbles = conv.messages.map(m => {
+        const d     = new Date(m.created_at);
+        const dKey  = d.toDateString();
+        const now   = new Date();
+        const label = dKey === now.toDateString() ? 'Today'
+                    : dKey === new Date(Date.now()-86400000).toDateString() ? 'Yesterday'
+                    : d.toLocaleDateString([],{day:'numeric',month:'short',year:'numeric'});
+        const divider = dKey !== lastDate ? `<div class="msg-date-div"><span>${label}</span></div>` : '';
+        lastDate = dKey;
+        const side  = isMine(m) ? 'sent' : 'recv';
+        const time  = d.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
+        const imgs  = (m.media_urls||[]).map(u =>
+          `<img src="${U.esc(u)}" onclick="window.open('${U.esc(u)}','_blank')" onerror="this.style.display='none'">`
+        ).join('');
+        const sender = !isMine(m) && Auth.user?.is_admin
+          ? `<span class="msg-bubble-sender">${U.esc(m.sender)}</span>` : '';
+        return `${divider}<div class="msg-bwrap ${side}"><div class="msg-bubble">
+          ${sender}
+          ${m.content ? U.esc(m.content) : ''}
+          ${imgs}
+          <span class="msg-bubble-time">${time}</span>
+        </div></div>`;
+      }).join('');
 
-      // Mobile: slide to thread panel + hide bottom nav like WhatsApp
-      const panels = document.querySelector('.msg-panels');
-      if (panels) panels.classList.add('thread-open');
-      document.body.classList.add('chat-open');
+      // Mobile: slide thread panel in
+      document.querySelector('.msg-shell')?.classList.add('thread-open');
 
-      const headerAvatar = (Auth.user?.is_admin ? conv.user_name : 'P').slice(0,1).toUpperCase();
-      const headerName   = Auth.user?.is_admin ? U.esc(conv.user_name) : 'Pa_mSikA Support';
-      const headerSub    = Auth.user?.is_admin
+      const hdrAv   = (Auth.user?.is_admin ? conv.user_name : 'P').slice(0,1).toUpperCase();
+      const hdrName = Auth.user?.is_admin ? U.esc(conv.user_name) : 'Pa_mSikA Support';
+      const hdrSub  = Auth.user?.is_admin
         ? `${U.esc(conv.user_email)} · ${U.esc(conv.subject)}`
         : `${U.esc(conv.subject)} · 🔒 encrypted`;
 
       el.innerHTML = `
-        <div class="msg-chat-header">
-          <button onclick="Messages._backToList()" style="background:none;border:none;cursor:pointer;color:var(--gold);font-size:1.5rem;padding:0 4px 0 0;flex-shrink:0;line-height:1;" title="Back">‹</button>
-          <div class="msg-chat-header-avatar">${headerAvatar}</div>
-          <div class="msg-chat-header-info">
-            <div class="msg-chat-header-name">${headerName}</div>
-            <div class="msg-chat-header-sub">${headerSub}</div>
+        <div class="msg-chat-hdr">
+          <button class="msg-back-btn" onclick="Messages._backToList()">‹</button>
+          <div class="msg-chat-hdr-av">${hdrAv}</div>
+          <div class="msg-chat-hdr-info">
+            <div class="msg-chat-hdr-name">${hdrName}</div>
+            <div class="msg-chat-hdr-sub">${hdrSub}</div>
           </div>
-          <button onclick="Messages.deleteConversation('${conv.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:1rem;padding:6px;border-radius:50%;transition:background .15s;" onmouseover="this.style.background='rgba(255,60,60,.12)'" onmouseout="this.style.background=''" title="Delete chat">🗑</button>
+          <button onclick="Messages.deleteConversation('${conv.id}')" style="background:none;border:none;cursor:pointer;color:var(--text-3);font-size:.9rem;padding:6px;border-radius:50%;" title="Delete chat">🗑</button>
         </div>
         <div class="msg-bubbles" id="msg-thread-body">
-          ${msgBubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:40px 20px;"><div style="font-size:2rem;margin-bottom:8px;">👋</div>Say hello!</div>'}
+          ${bubbles || '<div style="text-align:center;color:var(--text-3);font-size:.8rem;padding:30px;">No messages yet — say hello!</div>'}
         </div>
         <div class="msg-input-bar">
           <div id="msg-media-preview" style="display:flex;flex-wrap:wrap;gap:6px;"></div>
           <div class="msg-input-row">
-            <label class="msg-attach-btn" title="Attach image">
-              📎<input type="file" accept="image/*,image/gif" multiple style="display:none;" onchange="Messages._stageMedia(this,'${conv.id}')">
+            <label class="msg-attach-btn" title="Attach image">📎
+              <input type="file" accept="image/*,image/gif" multiple style="display:none;" onchange="Messages._stageMedia(this,'${conv.id}')">
             </label>
             <textarea id="msg-reply-input" class="msg-textarea" placeholder="Message…" rows="1"
               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();Messages.sendReply('${conv.id}')}"
@@ -492,29 +483,25 @@ const Messages = {
           </div>
         </div>`;
 
+      // Scroll to bottom only on non-silent opens
       const body = document.getElementById('msg-thread-body');
-      // Only auto-scroll on initial open, not on silent poll refreshes
       if (body && !silent) body.scrollTop = body.scrollHeight;
-      // Restore any in-progress reply text draft after re-render
-      if (draftText) {
+
+      // Restore draft text
+      if (draft) {
         const inp = document.getElementById('msg-reply-input');
-        if (inp) {
-          inp.value = draftText;
-          inp.style.height = 'auto';
-          inp.style.height = Math.min(inp.scrollHeight, 120) + 'px';
-        }
+        if (inp) { inp.value = draft; inp.style.height = 'auto'; inp.style.height = Math.min(inp.scrollHeight,120)+'px'; }
       }
-      // Restore staged media previews — the innerHTML replace wipes the preview div
-      if (this._replyMedia.length) {
-        const preview = document.getElementById('msg-media-preview');
-        if (preview) {
-          preview.innerHTML = this._replyMedia.map((url, i) =>
-            '<div style="position:relative;display:inline-block;">' +
-            '<img src="' + U.esc(url) + '" style="height:48px;width:48px;object-fit:cover;border-radius:4px;border:1px solid var(--border);">' +
-            '<button onclick="Messages._removeMedia(' + i + ')" style="position:absolute;top:-4px;right:-4px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:16px;height:16px;font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>' +
-            '</div>'
-          ).join('');
-        }
+      // Restore staged media previews
+      if (media.length) {
+        this._replyMedia = media;
+        const prev = document.getElementById('msg-media-preview');
+        if (prev) prev.innerHTML = media.map((url,i) =>
+          `<div style="position:relative;display:inline-block;">
+            <img src="${U.esc(url)}" style="height:46px;width:46px;object-fit:cover;border-radius:6px;border:1px solid var(--border);">
+            <button onclick="Messages._removeMedia(${i})" style="position:absolute;top:-4px;right:-4px;background:var(--bg-card);border:1px solid var(--border);border-radius:50%;width:16px;height:16px;font-size:.55rem;cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;">✕</button>
+          </div>`
+        ).join('');
       }
     } catch(e) { if (!silent) Toast.show('Error', e.message, 'error', '⚠️'); }
   },
@@ -808,26 +795,18 @@ const Messages = {
 
   _clearThread() {
     this._activeConv = null;
-    const panels = document.querySelector('.msg-panels');
-    if (panels) panels.classList.remove('thread-open');
-    document.body.classList.remove('chat-open');
+    document.querySelector('.msg-shell')?.classList.remove('thread-open');
     const el = document.getElementById('messages-thread');
-    if (el) el.innerHTML = `<div style="display:flex;flex-direction:column;align-items:center;justify-content:center;height:100%;color:var(--text-3);text-align:center;padding:40px;gap:10px;">
-      <div style="width:72px;height:72px;border-radius:50%;background:var(--gold-dim);border:2px solid var(--gold);display:flex;align-items:center;justify-content:center;font-size:2rem;">💬</div>
-      <div style="font-size:.95rem;font-weight:700;color:var(--text-2);">Your conversations</div>
-      <div style="font-size:.76rem;max-width:220px;line-height:1.6;">Select a chat from the left, or tap <strong style="color:var(--gold);">✏️ New</strong> to start one</div>
-    </div>`;
+    if (el) el.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100%;padding:40px;color:var(--text-3);font-size:.82rem;text-align:center;"><div><div style="font-size:2rem;margin-bottom:8px;">💬</div>Select a conversation or tap ✏️ New</div></div>';
   },
 
   _backToList() {
-    const panels = document.querySelector('.msg-panels');
-    if (panels) panels.classList.remove('thread-open');
-    document.body.classList.remove('chat-open');
+    document.querySelector('.msg-shell')?.classList.remove('thread-open');
     this._activeConv = null;
   },
 
   async deleteConversation(convId) {
-    const ok = await Confirm.show('Delete this conversation?', {
+    const ok = await Confirm.show('Delete this entire conversation?', {
       title: 'Delete Chat', icon: '🗑', okText: 'Delete', okColor: 'var(--red)', okBorder: 'var(--red)'
     });
     if (!ok) return;
@@ -1788,7 +1767,7 @@ const Views = {
   show(v) {
     // Stop polling when leaving community/messages
     if (this.current === 'community' && v !== 'community') Community.stopPolling();
-    if (this.current === 'messages' && v !== 'messages') { Messages.stopPolling(); document.body.classList.remove('chat-open'); }
+    if (this.current === 'messages' && v !== 'messages') Messages.stopPolling();
     this.current = v;
     ['home', 'favorites', 'affiliate', 'account', 'community', 'messages'].forEach(x => {
       const el = document.getElementById('view-' + x);
