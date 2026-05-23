@@ -24,7 +24,7 @@ async def log_action(
         resource_id=str(resource_id) if resource_id else None,
         ip_address=ip_address,
         user_agent=user_agent,
-        metadata=metadata,
+        audit_metadata=metadata,
     )
     db.add(entry)
     # Intentionally not committing here — caller commits via session context

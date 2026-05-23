@@ -3,7 +3,8 @@ Community feed — posts, likes, comments.
 """
 import uuid
 from datetime import datetime, timezone
-from fastapi import APIRouter, Depends, HTTPException, Form, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from sqlalchemy.orm import selectinload
@@ -14,6 +15,11 @@ from app.models.user import User
 from app.api.deps import get_current_user, get_current_admin
 
 router = APIRouter(prefix="/community", tags=["community"])
+
+
+class PostCreate(BaseModel):
+    content: str
+    images: list[str] = []
 
 
 def _serialize_post(p: CommunityPost) -> dict:
@@ -58,20 +64,18 @@ async def list_posts(db: AsyncSession = Depends(get_db)):
 
 @router.post("/posts")
 async def create_post(
-    content: str = Form(...),
-    images: list[str] = Form(default=[]),
+    payload: PostCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ):
     post = CommunityPost(
-        user_id=current_user.id,   # ✅ save author
-        content=content,
-        images=images,
+        user_id=current_user.id,
+        content=payload.content,
+        images=payload.images,
     )
     db.add(post)
     await db.flush()
     await db.refresh(post)
-    # Load author for response
     post.author = current_user
     post.comments = []
     post.liked_by = []
