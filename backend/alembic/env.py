@@ -16,7 +16,8 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
-DATABASE_URL = settings.DATABASE_URL_ASYNC
+import os
+DATABASE_URL = os.environ.get("DATABASE_URL_DIRECT") or settings.DATABASE_URL_ASYNC
 
 _connect_args = {"statement_cache_size": 0, "ssl": "require"}
 
