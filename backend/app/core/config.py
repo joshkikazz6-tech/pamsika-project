@@ -52,8 +52,8 @@ class Settings(BaseSettings):
     ADMIN_EMAIL: str = "admin@pamsika.mw"
     ADMIN_PASSWORD: str = "ChangeMe123!"  # ← CHANGE THIS in your .env
 
-    # Cookie settings
-    COOKIE_SECURE: bool = True
+    # Cookie settings — set COOKIE_SECURE=true in production .env (HTTPS only)
+    COOKIE_SECURE: bool = False
     COOKIE_SAMESITE: str = "lax"
 
     class Config:

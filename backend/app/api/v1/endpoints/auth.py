@@ -45,7 +45,9 @@ async def register(
         referred_by=payload.referred_by or None,
     )
     db.add(user)
-    await db.flush()
+    await db.flush()  # assigns user.id before commit
+    await log_action(db, "register", user_id=user.id, ip_address=get_client_ip(request))
+    await db.commit()  # FIX: commit user to DB before issuing token
 
     access_token = create_access_token(str(user.id), {"is_admin": user.is_admin})
     refresh_token = create_refresh_token(str(user.id))
@@ -60,7 +62,6 @@ async def register(
         path="/",
     )
 
-    await log_action(db, "register", user_id=user.id, ip_address=get_client_ip(request))
     return TokenResponse(access_token=access_token)
 
 
@@ -84,7 +85,8 @@ async def login(
         raise HTTPException(status_code=403, detail="Account is disabled")
 
     user.last_login_ip = get_client_ip(request)
-    await db.flush()
+    await log_action(db, "login", user_id=user.id, ip_address=get_client_ip(request))
+    await db.commit()  # FIX: commit before issuing token
 
     access_token = create_access_token(str(user.id), {"is_admin": user.is_admin})
     refresh_token = create_refresh_token(str(user.id))
@@ -99,7 +101,6 @@ async def login(
         path="/",
     )
 
-    await log_action(db, "login", user_id=user.id, ip_address=get_client_ip(request))
     return TokenResponse(access_token=access_token)
 
 
