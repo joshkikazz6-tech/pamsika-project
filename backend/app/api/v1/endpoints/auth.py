@@ -46,8 +46,11 @@ async def register(
     )
     db.add(user)
     await db.flush()  # assigns user.id before commit
-    await log_action(db, "register", user_id=user.id, ip_address=get_client_ip(request))
-    await db.commit()  # FIX: commit user to DB before issuing token
+    try:
+        await log_action(db, "register", user_id=user.id, ip_address=get_client_ip(request))
+    except Exception:
+        pass  # audit log failure must never block registration
+    await db.commit()  # commit user to DB before issuing token
 
     access_token = create_access_token(str(user.id), {"is_admin": user.is_admin})
     refresh_token = create_refresh_token(str(user.id))
@@ -85,8 +88,11 @@ async def login(
         raise HTTPException(status_code=403, detail="Account is disabled")
 
     user.last_login_ip = get_client_ip(request)
-    await log_action(db, "login", user_id=user.id, ip_address=get_client_ip(request))
-    await db.commit()  # FIX: commit before issuing token
+    try:
+        await log_action(db, "login", user_id=user.id, ip_address=get_client_ip(request))
+    except Exception:
+        pass  # audit log failure must never block login
+    await db.commit()  # commit before issuing token
 
     access_token = create_access_token(str(user.id), {"is_admin": user.is_admin})
     refresh_token = create_refresh_token(str(user.id))

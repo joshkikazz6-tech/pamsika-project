@@ -57,6 +57,22 @@ async def _fix_schema():
     Idempotent schema fix — each statement runs in its own transaction
     so a failure on one never affects the others.
     """
+    # ── audit_logs ────────────────────────────────────────────────────────────
+    await _run("""
+        CREATE TABLE IF NOT EXISTS audit_logs (
+            id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+            user_id     UUID REFERENCES users(id) ON DELETE SET NULL,
+            action      VARCHAR(100) NOT NULL,
+            resource    VARCHAR(100),
+            resource_id VARCHAR(100),
+            ip_address  VARCHAR(45),
+            user_agent  VARCHAR(512),
+            audit_metadata JSON,
+            created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+        )
+    """)
+    await _run("CREATE INDEX IF NOT EXISTS ix_audit_logs_user_id ON audit_logs(user_id)")
+
     # ── community_posts ───────────────────────────────────────────────────────
     await _run("""
         CREATE TABLE IF NOT EXISTS community_posts (

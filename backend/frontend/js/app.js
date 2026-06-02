@@ -9,6 +9,8 @@ const CFG = {
   email:      'Pamsika8@gmail.com',
   fbLink:     'https://www.facebook.com/share/1aFSLUWRQy/',
   siteUrl:    window.location.origin,
+  adminCombo: ['p','a','m','s','i','k','a'],  // type "pamsika" anywhere to open admin
+  adminHash:  '#admin-pamsika',
 };
 
 /**
